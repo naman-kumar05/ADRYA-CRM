@@ -1,0 +1,449 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  SALES_MANAGER
+  SALES_EXECUTIVE
+  FINANCE_MANAGER
+  FINANCE_EXECUTIVE
+  DEALER
+  VENDOR
+  ACCOUNTS
+  MANAGEMENT
+}
+
+enum Priority {
+  HOT
+  WARM
+  COLD
+}
+
+model User {
+  id                String   @id @default(cuid())
+  name              String
+  email             String   @unique
+  mobile            String?
+  passwordHash      String
+  role              Role
+  active            Boolean  @default(true)
+  monthlyLeadTarget Int?
+  dealerId          String?
+  dealer            Dealer?  @relation(fields: [dealerId], references: [id])
+  vendorId          String?
+  vendor            Vendor?  @relation(fields: [vendorId], references: [id])
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  assignedLeads Lead[]         @relation("LeadAssignee")
+  createdLeads  Lead[]         @relation("LeadCreator")
+  followUps     FollowUp[]     @relation("FollowUpAssignee")
+  loanCases     LoanCase[]     @relation("CaseExecutive")
+  documents     Document[]
+  auditLogs     AuditLog[]
+  loginHistory  LoginHistory[]
+  notifications Notification[]
+
+  @@index([role])
+  @@index([active])
+}
+
+model LoginHistory {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  email     String
+  success   Boolean
+  ip        String?
+  createdAt DateTime @default(now())
+
+  @@index([email])
+  @@index([createdAt])
+}
+
+model Customer {
+  id         String   @id @default(cuid())
+  code       String   @unique
+  name       String
+  mobile     String   @unique
+  altMobile  String?
+  email      String?
+  occupation String?
+  address    String?
+  state      String
+  district   String
+  city       String
+  pincode    String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  leads        Lead[]
+  requirements Requirement[]
+  loanCases    LoanCase[]
+
+  @@index([name])
+  @@index([createdAt])
+}
+
+model Lead {
+  id              String    @id @default(cuid())
+  code            String    @unique
+  customerId      String
+  customer        Customer  @relation(fields: [customerId], references: [id])
+  requirementId   String?   @unique
+  requirement     Requirement? @relation(fields: [requirementId], references: [id])
+  source          String
+  category        String
+  productName     String
+  requirementText String?
+  budget          Decimal?  @db.Decimal(14, 2)
+  loanRequired    Boolean   @default(false)
+  loanAmount      Decimal?  @db.Decimal(14, 2)
+  assignedToId    String?
+  assignedTo      User?     @relation("LeadAssignee", fields: [assignedToId], references: [id])
+  createdById     String?
+  createdBy       User?     @relation("LeadCreator", fields: [createdById], references: [id])
+  dealerId        String?
+  dealer          Dealer?   @relation(fields: [dealerId], references: [id])
+  vendorId        String?
+  vendor          Vendor?   @relation(fields: [vendorId], references: [id])
+  priority        Priority  @default(WARM)
+  status          String    @default("New")
+  pipelineStage   String    @default("Lead Inbound")
+  stageUpdatedAt  DateTime  @default(now())
+  dealerStatus    String    @default("Pending")
+  nextFollowUp    DateTime?
+  remarks         String?
+  state           String
+  district        String
+  city            String
+  pincode         String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  loanCases LoanCase[]
+  followUps FollowUp[]
+  documents Document[]
+
+  @@index([status])
+  @@index([pipelineStage])
+  @@index([stageUpdatedAt])
+  @@index([priority])
+  @@index([assignedToId])
+  @@index([dealerId])
+  @@index([vendorId])
+  @@index([createdAt])
+  @@index([source])
+  @@index([category])
+  @@index([customerId])
+}
+
+model Requirement {
+  id           String   @id @default(cuid())
+  code         String   @unique
+  customerId   String
+  customer     Customer @relation(fields: [customerId], references: [id])
+  category     String
+  productName  String
+  details      String?
+  budget       Decimal? @db.Decimal(14, 2)
+  loanRequired Boolean  @default(false)
+  loanAmount   Decimal? @db.Decimal(14, 2)
+  status       String   @default("Open")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  lead      Lead?
+  loanCases LoanCase[]
+
+  @@index([customerId])
+  @@index([status])
+  @@index([category])
+}
+
+model Product {
+  id       String  @id @default(cuid())
+  name     String
+  category String
+  active   Boolean @default(true)
+
+  @@unique([category, name])
+}
+
+model LeadSource {
+  id     String  @id @default(cuid())
+  name   String  @unique
+  active Boolean @default(true)
+}
+
+model StatusOption {
+  id     String  @id @default(cuid())
+  entity String
+  name   String
+  sort   Int
+  active Boolean @default(true)
+
+  @@unique([entity, name])
+}
+
+model Territory {
+  id       String @id @default(cuid())
+  state    String
+  district String
+  city     String
+
+  @@unique([state, district, city])
+}
+
+model Campaign {
+  id        String    @id @default(cuid())
+  name      String
+  source    String
+  spend     Decimal   @default(0) @db.Decimal(14, 2)
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+
+  @@index([source])
+}
+
+model Dealer {
+  id              String   @id @default(cuid())
+  code            String   @unique
+  companyName     String
+  brands          String[]
+  contactName     String
+  mobile          String
+  email           String?
+  state           String
+  district        String
+  city            String
+  territory       String?
+  products        String[]
+  agreementStatus String   @default("Pending")
+  payoutTerms     String?
+  status          String   @default("New")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  users     User[]
+  leads     Lead[]
+  loanCases LoanCase[]
+
+  @@index([status])
+  @@index([state])
+}
+
+model Vendor {
+  id                 String   @id @default(cuid())
+  code               String   @unique
+  companyName        String
+  contactName        String
+  mobile             String
+  email              String?
+  serviceArea        String
+  products           String[]
+  capacity           String?
+  installCapability  String?
+  pricingReference   String?
+  agreementStatus    String   @default("Pending")
+  payoutTerms        String?
+  status             String   @default("New")
+  state              String
+  district           String
+  city               String
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  users User[]
+  leads Lead[]
+
+  @@index([status])
+}
+
+model FinancePartner {
+  id                String   @id @default(cuid())
+  code              String   @unique
+  name              String
+  partnerType       String
+  products          String[]
+  states            String[]
+  loanTypes         String[]
+  amountMin         Decimal  @db.Decimal(14, 2)
+  amountMax         Decimal  @db.Decimal(14, 2)
+  documentChecklist String?
+  rmName            String?
+  rmMobile          String?
+  portalReference   String?
+  payoutTerms       String?
+  status            String   @default("Active")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  loanCases LoanCase[]
+
+  @@index([status])
+}
+
+model LoanCase {
+  id                 String          @id @default(cuid())
+  code               String          @unique
+  leadId             String?
+  lead               Lead?           @relation(fields: [leadId], references: [id])
+  customerId         String
+  customer           Customer        @relation(fields: [customerId], references: [id])
+  requirementId      String?
+  requirement        Requirement?    @relation(fields: [requirementId], references: [id])
+  productName        String
+  loanType           String
+  loanAmount         Decimal         @db.Decimal(14, 2)
+  lenderId           String?
+  lender             FinancePartner? @relation(fields: [lenderId], references: [id])
+  dealerId           String?
+  dealer             Dealer?         @relation(fields: [dealerId], references: [id])
+  executiveId        String?
+  executive          User?           @relation("CaseExecutive", fields: [executiveId], references: [id])
+  loginDate          DateTime?
+  applicationNumber  String?
+  status             String          @default("New")
+  sanctionAmount     Decimal?        @db.Decimal(14, 2)
+  sanctionDate       DateTime?
+  disbursementAmount Decimal?        @db.Decimal(14, 2)
+  disbursementDate   DateTime?
+  queryNote          String?
+  remarks            String?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  documents Document[]
+  followUps FollowUp[]
+  payouts   Payout[]
+  events    StatusEvent[]
+
+  @@index([status])
+  @@index([customerId])
+  @@index([leadId])
+  @@index([executiveId])
+  @@index([lenderId])
+  @@index([createdAt])
+}
+
+model StatusEvent {
+  id         String   @id @default(cuid())
+  loanCaseId String
+  loanCase   LoanCase @relation(fields: [loanCaseId], references: [id], onDelete: Cascade)
+  fromStatus String?
+  toStatus   String
+  note       String?
+  userId     String?
+  createdAt  DateTime @default(now())
+
+  @@index([loanCaseId])
+}
+
+model Document {
+  id           String    @id @default(cuid())
+  loanCaseId   String?
+  loanCase     LoanCase? @relation(fields: [loanCaseId], references: [id], onDelete: Cascade)
+  leadId       String?
+  lead         Lead?     @relation(fields: [leadId], references: [id])
+  docType      String
+  status       String    @default("Pending")
+  fileName     String?
+  storageKey   String?
+  mimeType     String?
+  sizeBytes    Int?
+  version      Int       @default(1)
+  notes        String?
+  uploadedById String?
+  uploadedBy   User?     @relation(fields: [uploadedById], references: [id])
+  createdAt    DateTime  @default(now())
+
+  @@index([loanCaseId])
+  @@index([leadId])
+  @@index([docType])
+}
+
+model FollowUp {
+  id          String    @id @default(cuid())
+  leadId      String?
+  lead        Lead?     @relation(fields: [leadId], references: [id])
+  loanCaseId  String?
+  loanCase    LoanCase? @relation(fields: [loanCaseId], references: [id])
+  assigneeId  String
+  assignee    User      @relation("FollowUpAssignee", fields: [assigneeId], references: [id])
+  type        String
+  dueAt       DateTime
+  result      String?
+  notes       String?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([dueAt])
+  @@index([assigneeId])
+  @@index([leadId])
+  @@index([completedAt])
+}
+
+model Payout {
+  id                String    @id @default(cuid())
+  loanCaseId        String
+  loanCase          LoanCase  @relation(fields: [loanCaseId], references: [id])
+  partnerKind       String
+  partnerName       String
+  transactionAmount Decimal?  @db.Decimal(14, 2)
+  expectedPayout    Decimal?  @db.Decimal(14, 2)
+  actualPayout      Decimal?  @db.Decimal(14, 2)
+  invoiceNo         String?
+  deductions        Decimal   @default(0) @db.Decimal(14, 2)
+  netReceived       Decimal?  @db.Decimal(14, 2)
+  payoutDate        DateTime?
+  status            String    @default("Expected")
+  notes             String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([status])
+  @@index([loanCaseId])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  title     String
+  body      String
+  href      String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId, read])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  entity    String
+  entityId  String
+  action    String
+  field     String?
+  oldValue  String?
+  newValue  String?
+  createdAt DateTime @default(now())
+
+  @@index([entity, entityId])
+  @@index([createdAt])
+  @@index([userId])
+}
+
+model Counter {
+  id    String @id
+  value Int    @default(0)
+}
