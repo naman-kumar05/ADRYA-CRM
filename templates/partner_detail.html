@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% load crm_tags %}
+{% block title %}{{ partner.name }} · ADYRA CRM{% endblock %}
+{% block content %}
+  <p class="muted">{{ partner.code }} · {{ partner.partner_type }} · {{ partner.status }}</p>
+  <h1>{{ partner.name }}</h1>
+  <p>{{ partner.amount_min|inr }} – {{ partner.amount_max|inr }}</p>
+  <p>Products: {{ partner.products|join_list }}</p>
+  <p>States: {{ partner.states|join_list }}</p>
+  <p>Loan types: {{ partner.loan_types|join_list }}</p>
+  {% if partner.rm_name %}<p>RM {{ partner.rm_name }} {% if partner.rm_mobile %}· {{ partner.rm_mobile }}{% endif %}</p>{% endif %}
+  {% if partner.document_checklist %}<p>{{ partner.document_checklist }}</p>{% endif %}
+  <p>{{ partner.payout_terms }}</p>
+  <h2>Cases</h2>
+  {% for loan in cases %}
+    <p><a href="{% url 'loan-detail' loan.id %}">{{ loan.code }}</a> · {{ loan.status }} · {{ loan.loan_amount|inr }}</p>
+  {% empty %}<p class="muted">No cases in your view.</p>{% endfor %}
+{% endblock %}

@@ -1,0 +1,35 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Sign in · ADYRA CRM</title>
+  <link rel="stylesheet" href="{% static 'crm/app.css' %}">
+</head>
+<body>
+  <div class="login-grid">
+    <section class="login-hero">
+      <div>
+        <p>ADYRA CRM</p>
+        <h1>From the first call to the payout.</h1>
+      </div>
+      <p>Tractor, machinery, solar, loans and insurance. One customer, many requirements, and a record of every handoff.</p>
+    </section>
+    <section class="login-box">
+      <h2>Sign in</h2>
+      {% if messages %}
+        {% for message in messages %}<p class="message error">{{ message }}</p>{% endfor %}
+      {% endif %}
+      <form method="post" class="grid">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ next }}">
+        <label>Email <input name="email" type="email" required autocomplete="username"></label>
+        <label>Password <input name="password" type="password" required autocomplete="current-password"></label>
+        <button type="submit">Sign in</button>
+        <p class="muted">Password reset is done by an admin until email delivery is connected.</p>
+      </form>
+    </section>
+  </div>
+</body>
+</html>

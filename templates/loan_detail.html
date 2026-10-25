@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% load crm_tags %}
+{% block title %}{{ loan.code }} · ADYRA CRM{% endblock %}
+{% block content %}
+  <p class="muted">{{ loan.code }}</p>
+  <h1>{{ loan.customer.name }}</h1>
+  <p class="note">{{ note }}</p>
+  <p><a href="{{ tel }}">{{ loan.customer.mobile }}</a> · {{ loan.product_name }} · {{ loan.loan_type }}</p>
+  <p>{{ loan.status }} · Asked {{ loan.loan_amount|inr }}{% if loan.lender %} · {{ loan.lender.name }}{% endif %}</p>
+  {% if loan.lead %}<p><a href="{% url 'lead-detail' loan.lead_id %}">Open the lead {{ loan.lead.code }}</a></p>{% endif %}
+  {% if loan.sanction_amount %}<p>Sanction {{ loan.sanction_amount|inr }} on {{ loan.sanction_date|date:"d M Y" }}</p>{% endif %}
+  {% if loan.disbursement_amount %}<p>Disbursed {{ loan.disbursement_amount|inr }} on {{ loan.disbursement_date|date:"d M Y" }}</p>{% endif %}
+
+  <h2>Timeline</h2>
+  <div class="timeline">
+    {% for event in events %}
+      <div>
+        <strong>{{ event.to_status }}</strong>
+        <p class="muted">{{ event.created_at|date:"d M Y, H:i" }}{% if event.from_status %} from {{ event.from_status }}{% endif %}</p>
+        {% if event.note %}<p>{{ event.note }}</p>{% endif %}
+      </div>
+    {% endfor %}
+  </div>
+
+  {% if can_update %}
+    <h2>Update case</h2>
+    <form method="post" action="{% url 'update-loan' loan.id %}" class="grid two">
+      {% csrf_token %}
+      <label>Status
+        <select name="status">{% for status in statuses %}<option {% if loan.status == status %}selected{% endif %}>{{ status }}</option>{% endfor %}</select>
+      </label>
+      <label>Application number <input name="application_number" value="{{ loan.application_number }}"></label>
+      <label>Lender
+        <select name="lender">
+          <option value="">None</option>
+          {% for partner in partners %}<option value="{{ partner.id }}" {% if loan.lender_id == partner.id %}selected{% endif %}>{{ partner.name }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Executive
+        <select name="executive">
+          <option value="">Unassigned</option>
+          {% for person in executives %}<option value="{{ person.id }}" {% if loan.executive_id == person.id %}selected{% endif %}>{{ person.name }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Sanction amount <input name="sanction_amount" value="{{ loan.sanction_amount|default_if_none:'' }}"></label>
+      <label>Sanction date <input type="datetime-local" name="sanction_date" value="{{ loan.sanction_date|date:'Y-m-d\\TH:i' }}"></label>
+      <label>Disbursement amount <input name="disbursement_amount" value="{{ loan.disbursement_amount|default_if_none:'' }}"></label>
+      <label>Disbursement date <input type="datetime-local" name="disbursement_date" value="{{ loan.disbursement_date|date:'Y-m-d\\TH:i' }}"></label>
+      <label>Login date <input type="datetime-local" name="login_date" value="{{ loan.login_date|date:'Y-m-d\\TH:i' }}"></label>
+      <label>Query <textarea name="query_note">{{ loan.query_note }}</textarea></label>
+      <label>Note <textarea name="note"></textarea></label>
+      <button type="submit">Save case</button>
+    </form>
+  {% endif %}
+
+  <h2>Documents</h2>
+  {% for doc in documents %}
+    <form method="post" action="{% url 'save-case-document' loan.id %}" enctype="multipart/form-data" class="grid" style="margin-bottom:12px">
+      {% csrf_token %}
+      <input type="hidden" name="doc_type" value="{{ doc.doc_type }}">
+      <strong>{{ doc.doc_type }}</strong> <span class="badge">{{ doc.status }}</span>
+      {% if doc.storage_key %}<a href="{% url 'download-document' doc.id %}">{{ doc.file_name }}</a>{% endif %}
+      {% if can_docs %}
+        <select name="status">{% for status in doc_statuses %}<option {% if doc.status == status %}selected{% endif %}>{{ status }}</option>{% endfor %}</select>
+        <input type="file" name="file" accept="application/pdf,image/*">
+        <button type="submit">Save</button>
+      {% endif %}
+    </form>
+  {% endfor %}
+
+  <h2>Payouts</h2>
+  {% for payout in payouts %}
+    <p>{{ payout.partner_name }} · expected {{ payout.expected_payout|inr }} · received {{ payout.actual_payout|inr }} · net {{ payout.net_received|inr }} · {{ payout.status }}</p>
+  {% empty %}<p class="muted">No payout recorded. Rates are entered on the case, not assumed.</p>{% endfor %}
+  {% if can_payout %}
+    <form method="post" action="{% url 'record-payout' loan.id %}" class="grid two">
+      {% csrf_token %}
+      <label>Partner kind <input name="partner_kind" value="Lender"></label>
+      <label>Partner name <input name="partner_name" value="{% if loan.lender %}{{ loan.lender.name }}{% endif %}" required></label>
+      <label>Transaction amount <input name="transaction_amount"></label>
+      <label>Expected payout <input name="expected_payout"></label>
+      <label>Actual payout <input name="actual_payout"></label>
+      <label>Deductions <input name="deductions" value="0"></label>
+      <label>Invoice <input name="invoice_no"></label>
+      <label>Payout date <input type="datetime-local" name="payout_date"></label>
+      <label>Status
+        <select name="status">{% for status in payout_statuses %}<option>{{ status }}</option>{% endfor %}</select>
+      </label>
+      <label>Notes <textarea name="notes"></textarea></label>
+      <button type="submit">Record payout</button>
+    </form>
+  {% endif %}
+{% endblock %}

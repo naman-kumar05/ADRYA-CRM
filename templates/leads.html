@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Leads · ADYRA CRM{% endblock %}
+{% block content %}
+  <div class="spread">
+    <h1>Leads</h1>
+    {% if can_write_leads %}<a class="button" href="{% url 'lead-new' %}">New lead</a>{% endif %}
+  </div>
+  <form class="search" method="get">
+    <input name="q" value="{{ q }}" placeholder="Search name or mobile">
+    <button type="submit">Search</button>
+  </form>
+  <form method="post">
+    {% csrf_token %}
+    <div class="list">
+      {% for lead in leads %}
+        <article class="card lead-card">
+          {% if can_assign %}<label class="check"><input type="checkbox" name="lead_ids" value="{{ lead.id }}"> Select</label>{% endif %}
+          <a href="{% url 'lead-detail' lead.id %}"><strong>{{ lead.customer.name }}</strong> · {{ lead.code }}</a>
+          <span>{{ lead.customer.mobile }} · {{ lead.city }}</span>
+          <span>{{ lead.product_name }} · {{ lead.pipeline_stage }} · {{ lead.status }}</span>
+          <span class="badge {{ lead.priority|lower }}">{{ lead.priority }}</span>
+          <span class="muted">{% if lead.assigned_to %}{{ lead.assigned_to.name }}{% else %}Unassigned{% endif %}</span>
+        </article>
+      {% empty %}
+        <p class="muted">No leads in your view.</p>
+      {% endfor %}
+    </div>
+    {% if can_assign %}
+      <div class="row" style="margin-top:12px">
+        <label>Assign selected
+          <select name="assigned_to">
+            <option value="">Choose</option>
+            {% for person in assignees %}<option value="{{ person.id }}">{{ person.name }}</option>{% endfor %}
+          </select>
+        </label>
+        <button type="submit">Assign</button>
+      </div>
+    {% endif %}
+  </form>
+{% endblock %}

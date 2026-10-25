@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Customers · ADYRA CRM{% endblock %}
+{% block content %}
+  <h1>Customers</h1>
+  <form class="search" method="get">
+    <input name="q" value="{{ q }}" placeholder="Search name or mobile">
+    <button type="submit">Search</button>
+  </form>
+  <div class="list">
+    {% for customer in customers %}
+      <article class="card">
+        <a href="{% url 'customer-detail' customer.id %}"><strong>{{ customer.name }}</strong></a>
+        <p>{{ customer.code }} · {{ customer.mobile }} · {{ customer.city }}</p>
+      </article>
+    {% empty %}<p class="muted">No customers in your view.</p>{% endfor %}
+  </div>
+{% endblock %}

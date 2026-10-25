@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Audit log · ADYRA CRM{% endblock %}
+{% block content %}
+  <h1>Audit log</h1>
+  <div class="wide">
+    <table>
+      <thead><tr><th>When</th><th>Who</th><th>Action</th><th>Field</th><th>From</th><th>To</th></tr></thead>
+      <tbody>
+        {% for row in rows %}
+          <tr>
+            <td>{{ row.created_at|date:"d M Y, H:i" }}</td>
+            <td>{% if row.user %}{{ row.user.name }}{% endif %}</td>
+            <td>{{ row.action }}<br><span class="muted">{{ row.entity }}</span></td>
+            <td>{{ row.field }}</td>
+            <td>{{ row.old_value }}</td>
+            <td>{{ row.new_value }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endblock %}

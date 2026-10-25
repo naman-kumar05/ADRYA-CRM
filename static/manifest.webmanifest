@@ -1,0 +1,9 @@
+{
+  "name": "ADYRA",
+  "short_name": "ADYRA",
+  "start_url": "/dashboard/",
+  "display": "standalone",
+  "background_color": "#f3efe6",
+  "theme_color": "#10281c",
+  "icons": [{ "src": "/static/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

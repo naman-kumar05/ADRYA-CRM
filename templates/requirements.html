@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% load crm_tags %}
+{% block title %}Requirements · ADYRA CRM{% endblock %}
+{% block content %}
+  <h1>Requirements</h1>
+  <div class="list">
+    {% for item in requirements %}
+      <article class="card">
+        <strong>{{ item.code }}</strong>
+        <p>{{ item.customer.name }} · {{ item.category }} · {{ item.product_name }}</p>
+        <p>{{ item.status }} · {{ item.loan_amount|inr }}</p>
+        {% if item.details %}<p class="muted">{{ item.details }}</p>{% endif %}
+      </article>
+    {% empty %}<p class="muted">No requirements in your view.</p>{% endfor %}
+  </div>
+{% endblock %}

@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% load crm_tags %}
+{% block title %}Finance partners · ADYRA CRM{% endblock %}
+{% block content %}
+  <h1>Finance partners</h1>
+  <div class="list">
+    {% for partner in partners %}
+      <article class="card">
+        <a href="{% url 'partner-detail' partner.id %}"><strong>{{ partner.name }}</strong></a>
+        <p>{{ partner.code }} · {{ partner.partner_type }} · {{ partner.amount_min|inr }} – {{ partner.amount_max|inr }} · {{ partner.status }}</p>
+        <p class="muted">{{ partner.products|join_list }} · {{ partner.states|join_list }}</p>
+      </article>
+    {% endfor %}
+  </div>
+  {% if can_write %}
+    <h2>Add a partner</h2>
+    <form method="post" class="grid two">
+      {% csrf_token %}
+      <label>Name <input name="name" required></label>
+      <label>Type
+        <select name="partner_type">{% for kind in types %}<option>{{ kind }}</option>{% endfor %}</select>
+      </label>
+      <label>Products <input name="products" placeholder="Tractor, Agriculture"></label>
+      <label>States <input name="states" placeholder="Uttar Pradesh, All"></label>
+      <label>Loan types <input name="loan_types" placeholder="New, Used"></label>
+      <label>Minimum <input name="amount_min" required></label>
+      <label>Maximum <input name="amount_max" required></label>
+      <label>RM name <input name="rm_name"></label>
+      <label>RM mobile <input name="rm_mobile"></label>
+      <label>Documents <textarea name="document_checklist"></textarea></label>
+      <label>Payout terms <textarea name="payout_terms"></textarea></label>
+      <button type="submit">Save partner</button>
+    </form>
+  {% endif %}
+{% endblock %}

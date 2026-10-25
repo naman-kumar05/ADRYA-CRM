@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Reports · ADYRA CRM{% endblock %}
+{% block content %}
+  <div class="spread">
+    <h1>Reports</h1>
+    <a class="button" href="{% url 'leads-csv' %}">Download leads CSV</a>
+  </div>
+  <div class="panels">
+    <section class="panel">
+      <h2>By status</h2>
+      {% for row in by_status %}<p class="spread"><span>{{ row.status }}</span><strong>{{ row.value }}</strong></p>{% endfor %}
+    </section>
+    <section class="panel">
+      <h2>By pipeline</h2>
+      {% for row in by_stage %}<p class="spread"><span>{{ row.pipeline_stage }}</span><strong>{{ row.value }}</strong></p>{% endfor %}
+    </section>
+  </div>
+{% endblock %}

@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Follow-ups · ADYRA CRM{% endblock %}
+{% block content %}
+  <h1>Follow-ups</h1>
+  <h2>Open</h2>
+  <div class="list">
+    {% for item in open_items %}
+      <article class="card">
+        <strong>{{ item.type }}</strong>
+        <p>{{ item.due_at|date:"d M Y, H:i" }}{% if item.due_at < now %} · overdue{% endif %}</p>
+        <p>{% if item.lead %}<a href="{% url 'lead-detail' item.lead_id %}">{{ item.lead.code }}</a> · {{ item.lead.customer.name }}{% endif %}</p>
+        <p>{{ item.notes }}</p>
+        {% if can_write %}
+          <form method="post" action="{% url 'finish-followup' item.id %}" class="row">
+            {% csrf_token %}
+            <select name="result">{% for result in results %}<option>{{ result }}</option>{% endfor %}</select>
+            <button type="submit">Mark done</button>
+          </form>
+        {% endif %}
+      </article>
+    {% empty %}<p class="muted">No open follow-ups.</p>{% endfor %}
+  </div>
+  <h2>Closed</h2>
+  {% for item in done_items %}
+    <p>{{ item.completed_at|date:"d M" }} · {{ item.type }} · {{ item.result }} · {{ item.notes }}</p>
+  {% endfor %}
+{% endblock %}

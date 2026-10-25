@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+{% load crm_tags %}
+{% block title %}{{ lead.customer.name }} · ADYRA CRM{% endblock %}
+{% block content %}
+  <p class="muted">{{ lead.code }} · {{ lead.pipeline_stage }}</p>
+  <div class="spread">
+    <h1>{{ lead.customer.name }}</h1>
+    <span class="badge {{ lead.priority|lower }}">{{ lead.priority }}</span>
+  </div>
+  <p><a href="{{ tel }}">{{ lead.customer.mobile }}</a> · {{ lead.city }}, {{ lead.district }}, {{ lead.state }}</p>
+  <p>{{ lead.category }} · {{ lead.product_name }} · {{ lead.source }} · {{ lead.status }}</p>
+  {% if lead.requirement_text %}<p>{{ lead.requirement_text }}</p>{% endif %}
+  <p class="muted">Loan {{ lead.loan_amount|inr }} · Budget {{ lead.budget|inr }}</p>
+
+  {% if can_write %}
+    <section class="panel">
+      <h2>Stage</h2>
+      {% if missing %}<p class="note">Still needed before PolicyBazaar: {{ missing|join:", " }}</p>{% endif %}
+      <form method="post" action="{% url 'move-stage' lead.id %}">
+        {% csrf_token %}
+        <div class="chips">
+          {% for stage in stages %}
+            <button class="{% if stage == lead.pipeline_stage %}secondary{% else %}light{% endif %}" name="pipeline_stage" value="{{ stage }}" type="submit">{{ stage }}</button>
+          {% endfor %}
+        </div>
+      </form>
+    </section>
+  {% endif %}
+
+  <section class="panel">
+    <h2>Documents</h2>
+    {% for doc in checklist %}
+      <form method="post" action="{% url 'save-checklist' lead.id %}" enctype="multipart/form-data" class="grid" style="margin-bottom:12px">
+        {% csrf_token %}
+        <input type="hidden" name="doc_type" value="{{ doc.doc_type }}">
+        <strong>{{ doc.doc_type }}</strong>
+        <span class="badge {% if doc.status == 'Pending' or doc.status == 'Rejected' %}warn{% else %}good{% endif %}">{{ doc.status }}</span>
+        {% if doc.storage_key %}<a href="{% url 'download-document' doc.id %}">{{ doc.file_name }}</a>{% endif %}
+        {% if can_docs %}
+          <label>Status
+            <select name="status">
+              {% for status in doc_statuses %}<option {% if doc.status == status %}selected{% endif %}>{{ status }}</option>{% endfor %}
+            </select>
+          </label>
+          <label>File <input type="file" name="file" accept="application/pdf,image/*"></label>
+          <button type="submit">Save {{ doc.doc_type }}</button>
+        {% endif %}
+      </form>
+    {% endfor %}
+  </section>
+
+  {% if can_follow %}
+    <section class="panel">
+      <h2>Call</h2>
+      <a class="button" href="{{ tel }}">Call {{ lead.customer.mobile }}</a>
+      <form method="post" action="{% url 'log-call' lead.id %}" class="grid" style="margin-top:12px">
+        {% csrf_token %}
+        <input type="hidden" name="type" value="Call">
+        <label>Result
+          <select name="result">{% for result in results %}<option>{{ result }}</option>{% endfor %}</select>
+        </label>
+        <label>Notes <textarea name="notes" placeholder="What did they say?"></textarea></label>
+        <button type="submit">Log this call</button>
+      </form>
+    </section>
+    <section class="panel">
+      <h2>WhatsApp</h2>
+      {% for item in templates %}
+        <form method="post" action="{% url 'send-whatsapp' lead.id %}">
+          {% csrf_token %}
+          <input type="hidden" name="label" value="{{ item.label }}">
+          <input type="hidden" name="text" value="{{ item.text }}">
+          <p>{{ item.text }}</p>
+          <button type="submit">{{ item.label }}</button>
+        </form>
+      {% endfor %}
+    </section>
+    <section class="panel">
+      <h2>Follow-up</h2>
+      <form method="post" action="{% url 'add-followup' lead.id %}" class="grid two">
+        {% csrf_token %}
+        <label>Type
+          <select name="type">{% for kind in followup_types %}<option>{{ kind }}</option>{% endfor %}</select>
+        </label>
+        <label>Due <input type="datetime-local" name="due_at" required></label>
+        <label>Notes <input name="notes"></label>
+        <button type="submit">Add follow-up</button>
+      </form>
+      {% for item in followups %}
+        <p>{{ item.due_at|date:"d M, H:i" }} · {{ item.type }} · {% if item.completed_at %}Done{% else %}Open{% endif %} · {{ item.notes }}</p>
+      {% endfor %}
+    </section>
+  {% endif %}
+
+  {% if can_dealer_status %}
+    <section class="panel">
+      <h2>Dealer status · {{ lead.dealer_status }}</h2>
+      <form method="post" action="{% url 'dealer-status' lead.id %}" class="row">
+        {% csrf_token %}
+        <select name="dealer_status">{% for status in dealer_statuses %}<option {% if lead.dealer_status == status %}selected{% endif %}>{{ status }}</option>{% endfor %}</select>
+        <button type="submit">Save</button>
+      </form>
+    </section>
+  {% endif %}
+
+  {% if can_write %}
+    <section class="panel">
+      <h2>File</h2>
+      <form method="post" class="grid two">
+        {% csrf_token %}
+        <input type="hidden" name="form" value="details">
+        <label>Status
+          <select name="status">{% for status in statuses %}<option {% if lead.status == status %}selected{% endif %}>{{ status }}</option>{% endfor %}</select>
+        </label>
+        <label>Priority
+          <select name="priority">{% for priority in priorities %}<option {% if lead.priority == priority %}selected{% endif %}>{{ priority }}</option>{% endfor %}</select>
+        </label>
+        {% if can_assign %}
+          <label>Assigned to
+            <select name="assigned_to">
+              {% for person in assignees %}<option value="{{ person.id }}" {% if lead.assigned_to_id == person.id %}selected{% endif %}>{{ person.name }}</option>{% endfor %}
+            </select>
+          </label>
+        {% endif %}
+        <label>Dealer
+          <select name="dealer">
+            <option value="">None</option>
+            {% for dealer in dealers %}<option value="{{ dealer.id }}" {% if lead.dealer_id == dealer.id %}selected{% endif %}>{{ dealer.company_name }}</option>{% endfor %}
+          </select>
+        </label>
+        <label>Vendor
+          <select name="vendor">
+            <option value="">None</option>
+            {% for vendor in vendors %}<option value="{{ vendor.id }}" {% if lead.vendor_id == vendor.id %}selected{% endif %}>{{ vendor.company_name }}</option>{% endfor %}
+          </select>
+        </label>
+        <label class="check"><input type="checkbox" name="loan_required" {% if lead.loan_required %}checked{% endif %}> Loan required</label>
+        <label>Loan amount <input name="loan_amount" value="{{ lead.loan_amount|default_if_none:'' }}"></label>
+        <label>Next follow-up <input type="datetime-local" name="next_follow_up" value="{{ lead.next_follow_up|date:'Y-m-d\\TH:i' }}"></label>
+        <label>Requirement <textarea name="requirement_text">{{ lead.requirement_text }}</textarea></label>
+        <label>Remarks <textarea name="remarks">{{ lead.remarks }}</textarea></label>
+        <button type="submit">Save file</button>
+      </form>
+    </section>
+  {% endif %}
+
+  {% if can_loan %}
+    <section class="panel">
+      <h2>Open a finance case</h2>
+      <p class="note">ADYRA records the case. The lender makes the final decision.</p>
+      <form method="post" action="{% url 'open-loan' lead.id %}" class="grid two">
+        {% csrf_token %}
+        <label>Amount <input name="loan_amount" required value="{{ lead.loan_amount|default_if_none:'' }}"></label>
+        <label>Loan type <input name="loan_type" value="New"></label>
+        <label>Lender
+          <select name="lender">
+            <option value="">Decide later</option>
+            {% for item in partners %}
+              {% if item.fits %}<option value="{{ item.partner.id }}">{{ item.partner.name }}</option>{% endif %}
+            {% endfor %}
+          </select>
+        </label>
+        <label>Executive
+          <select name="executive">
+            <option value="">Unassigned</option>
+            {% for person in executives %}<option value="{{ person.id }}">{{ person.name }}</option>{% endfor %}
+          </select>
+        </label>
+        <label>Remarks <input name="remarks"></label>
+        <button type="submit">Open case</button>
+      </form>
+      {% for loan in loans %}
+        <p><a href="{% url 'loan-detail' loan.id %}">{{ loan.code }}</a> · {{ loan.status }} · {{ loan.loan_amount|inr }}</p>
+      {% endfor %}
+    </section>
+  {% endif %}
+{% endblock %}

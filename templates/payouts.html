@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% load crm_tags %}
+{% block title %}Payouts · ADYRA CRM{% endblock %}
+{% block content %}
+  <h1>Payouts</h1>
+  <p class="muted">Net received is the actual amount minus deductions. Nothing here is a fixed percentage.</p>
+  <div class="wide">
+    <table>
+      <thead><tr><th>Case</th><th>Partner</th><th>Expected</th><th>Actual</th><th>Deductions</th><th>Net</th><th>Status</th></tr></thead>
+      <tbody>
+        {% for payout in payouts %}
+          <tr>
+            <td><a href="{% url 'loan-detail' payout.loan_case_id %}">{{ payout.loan_case.code }}</a><br>{{ payout.loan_case.customer.name }}</td>
+            <td>{{ payout.partner_name }}</td>
+            <td>{{ payout.expected_payout|inr }}</td>
+            <td>{{ payout.actual_payout|inr }}</td>
+            <td>{{ payout.deductions|inr }}</td>
+            <td>{{ payout.net_received|inr }}</td>
+            <td>{{ payout.status }}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="7">No payouts in your view.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endblock %}

@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}New lead · ADYRA CRM{% endblock %}
+{% block content %}
+  <h1>New lead</h1>
+  {% if duplicate %}
+    <div class="note">
+      <p>{{ duplicate.name }} ({{ duplicate.code }}) in {{ duplicate.city }}, {{ duplicate.state }} already uses this mobile.</p>
+      <ul>
+        {% for item in duplicate.leads.all %}
+          <li>{{ item.code }} · {{ item.product_name }} · {{ item.status }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+  {% endif %}
+  <form method="post" class="grid two">
+    {% csrf_token %}
+    <label>Name <input name="name" required value="{{ posted.name }}"></label>
+    <label>Mobile <input name="mobile" required inputmode="numeric" value="{{ posted.mobile }}"></label>
+    <label>Alternate mobile <input name="alt_mobile" inputmode="numeric" value="{{ posted.alt_mobile }}"></label>
+    <label>Email <input name="email" type="email" value="{{ posted.email }}"></label>
+    <label>Occupation <input name="occupation" value="{{ posted.occupation }}"></label>
+    <label>Pincode <input name="pincode" value="{{ posted.pincode }}"></label>
+    <label>State
+      <input name="state" required list="states" value="{{ posted.state }}">
+    </label>
+    <label>District <input name="district" required list="districts" value="{{ posted.district }}"></label>
+    <label>City <input name="city" required list="cities" value="{{ posted.city }}"></label>
+    <label>Source
+      <select name="source" required>
+        {% for source in sources %}
+          <option {% if posted.source == source.name %}selected{% endif %}>{{ source.name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Product
+      <select name="product" required>
+        {% for product in products %}
+          <option value="{{ product.id }}" {% if posted.product == product.id|stringformat:"s" %}selected{% endif %}>{{ product.category }} · {{ product.name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Priority
+      <select name="priority">
+        {% for priority in priorities %}
+          <option {% if posted.priority == priority or not posted.priority and priority == "WARM" %}selected{% endif %}>{{ priority }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label class="check"><input type="checkbox" name="loan_required" {% if posted.loan_required %}checked{% endif %}> Loan required</label>
+    <label>Loan amount <input name="loan_amount" inputmode="decimal" value="{{ posted.loan_amount }}"></label>
+    <label>Budget <input name="budget" inputmode="decimal" value="{{ posted.budget }}"></label>
+    <label>Dealer
+      <select name="dealer">
+        <option value="">None</option>
+        {% for dealer in dealers %}<option value="{{ dealer.id }}" {% if posted.dealer == dealer.id|stringformat:"s" %}selected{% endif %}>{{ dealer.company_name }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Vendor
+      <select name="vendor">
+        <option value="">None</option>
+        {% for vendor in vendors %}<option value="{{ vendor.id }}" {% if posted.vendor == vendor.id|stringformat:"s" %}selected{% endif %}>{{ vendor.company_name }}</option>{% endfor %}
+      </select>
+    </label>
+    {% if can_assign %}
+      <label>Assign to
+        <select name="assigned_to">
+          <option value="">Me</option>
+          {% for person in assignees %}<option value="{{ person.id }}">{{ person.name }}</option>{% endfor %}
+        </select>
+      </label>
+    {% endif %}
+    <label>Next follow-up <input type="datetime-local" name="next_follow_up" value="{{ posted.next_follow_up }}"></label>
+    <label>Requirement <textarea name="requirement_text">{{ posted.requirement_text }}</textarea></label>
+    <label>Address <textarea name="address">{{ posted.address }}</textarea></label>
+    <label>Remarks <textarea name="remarks">{{ posted.remarks }}</textarea></label>
+    <div class="actions">
+      {% if duplicate %}
+        <button type="submit" name="duplicate_choice" value="requirement">New requirement on this customer</button>
+        <button type="submit" class="secondary" name="duplicate_choice" value="lead">Another lead on this customer</button>
+      {% else %}
+        <button type="submit">Save lead</button>
+      {% endif %}
+    </div>
+  </form>
+  <datalist id="states">{% for place in territories %}<option value="{{ place.state }}">{% endfor %}</datalist>
+  <datalist id="districts">{% for place in territories %}<option value="{{ place.district }}">{% endfor %}</datalist>
+  <datalist id="cities">{% for place in territories %}<option value="{{ place.city }}">{% endfor %}</datalist>
+{% endblock %}

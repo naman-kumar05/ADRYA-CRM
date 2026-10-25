@@ -1,20 +1,32 @@
 # ADYRA CRM
 
-Cloud-ready operations CRM for leads, customers, dealers, vendors, finance cases, documents, follow-ups and payouts.
+Operations CRM for leads, customers, dealers, vendors, finance cases, documents, follow-ups and payouts. The application is Django and PostgreSQL.
 
-## Run it locally
+Python 3.11 or newer and PostgreSQL are required. The virtualenv, `.env`, and uploaded customer files are not in git. Each computer creates its own.
 
-Postgres is already expected on `localhost:5432`, database `adrya_crm`.
+## First run after cloning
 
 ```bash
-npm install
-npm run db:setup
-npm run dev
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+createdb adrya_crm
+python manage.py migrate
+python manage.py seed
+python manage.py runserver
 ```
 
-Open http://localhost:3000
+On Windows, create the virtualenv with `py -3 -m venv .venv`, activate it with `.venv\Scripts\activate`, and copy the sample env with `copy .env.example .env`.
 
-Demo password for every account: `Adrya@2026`
+Before `migrate`, edit `.env`:
+
+- `DATABASE_URL` must use the Postgres role on that computer. Replace `YOUR_POSTGRES_USER`. Create the empty database `adrya_crm` first.
+- Replace `SESSION_SECRET` and `INTAKE_API_KEY` with long private values. The intake key is what a website sends as `X-Api-Key` to `POST /api/intake/`. It stays on the server.
+
+Open http://localhost:8000
+
+Demo password for every seeded account: `Adrya@2026`
 
 | Email | Role |
 | --- | --- |
@@ -25,6 +37,8 @@ Demo password for every account: `Adrya@2026`
 | dealer@abctractors.test | Dealer (only ABC Tractors leads) |
 | vendor@surya.test | Vendor (only Surya Solar leads) |
 
+`python manage.py seed` loads that demo once. If `admin@adrya.test` already exists, it leaves the database alone. Replace these logins before any real customer file is stored.
+
 ## What is intentionally not in this build
 
-Dealer/vendor/customer portals as separate sites, WhatsApp/SMS delivery, a mobile app, and AI scoring are later versions. In-app alerts work now. Messaging providers can be added without changing the lead flow.
+Dealer and vendor portals as separate sites, WhatsApp or SMS delivery, a native mobile app, and AI scoring are later. The phone screens, click-to-call, and WhatsApp template links work now. The lender still makes the credit decision.

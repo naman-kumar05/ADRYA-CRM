@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% load crm_tags %}
+{% block title %}Loan cases · ADYRA CRM{% endblock %}
+{% block content %}
+  <h1>Loan cases</h1>
+  <p class="note">{{ note }}</p>
+  <div class="list">
+    {% for loan in loans %}
+      <article class="card">
+        <a href="{% url 'loan-detail' loan.id %}"><strong>{{ loan.code }}</strong></a>
+        <p>{{ loan.customer.name }} · {{ loan.product_name }} · {{ loan.status }}</p>
+        <p>{{ loan.loan_amount|inr }}{% if loan.lender %} · {{ loan.lender.name }}{% endif %}</p>
+      </article>
+    {% empty %}<p class="muted">No cases in your view.</p>{% endfor %}
+  </div>
+{% endblock %}

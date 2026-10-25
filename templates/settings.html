@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% load crm_tags %}
+{% block title %}Settings · ADYRA CRM{% endblock %}
+{% block content %}
+  <h1>Settings</h1>
+  <section class="panel">
+    <h2>People</h2>
+    {% for person in people %}
+      <p>{{ person.name }} · {{ person.role }} · {{ person.email }} · {% if person.is_active %}Active{% else %}Inactive{% endif %}</p>
+    {% endfor %}
+    <h3>New login</h3>
+    <form method="post" class="grid two">
+      {% csrf_token %}
+      <input type="hidden" name="form" value="user">
+      <label>Name <input name="name" required></label>
+      <label>Email <input name="email" type="email" required></label>
+      <label>Password <input name="password" type="text" required minlength="8"></label>
+      <label>Role
+        <select name="role">{% for role in roles %}<option value="{{ role }}">{{ role }}</option>{% endfor %}</select>
+      </label>
+      <label>Dealer link
+        <select name="dealer"><option value="">None</option>{% for dealer in dealers %}<option value="{{ dealer.id }}">{{ dealer.company_name }}</option>{% endfor %}</select>
+      </label>
+      <label>Vendor link
+        <select name="vendor"><option value="">None</option>{% for vendor in vendors %}<option value="{{ vendor.id }}">{{ vendor.company_name }}</option>{% endfor %}</select>
+      </label>
+      <button type="submit">Create login</button>
+    </form>
+    <h3>Reset a password</h3>
+    <form method="post" class="grid two">
+      {% csrf_token %}
+      <input type="hidden" name="form" value="password">
+      <label>Person
+        <select name="user">{% for person in people %}<option value="{{ person.id }}">{{ person.name }}</option>{% endfor %}</select>
+      </label>
+      <label>New password <input name="password" required minlength="8"></label>
+      <button type="submit">Reset password</button>
+    </form>
+    <h3>Active or inactive</h3>
+    <form method="post" class="row">
+      {% csrf_token %}
+      <input type="hidden" name="form" value="active">
+      <select name="user">{% for person in people %}<option value="{{ person.id }}">{{ person.name }}</option>{% endfor %}</select>
+      <select name="active"><option value="yes">Active</option><option value="no">Inactive</option></select>
+      <button type="submit">Save</button>
+    </form>
+  </section>
+  <section class="panel">
+    <h2>Products</h2>
+    {% for product in products %}<p>{{ product.category }} · {{ product.name }}</p>{% endfor %}
+    <form method="post" class="grid two">
+      {% csrf_token %}<input type="hidden" name="form" value="product">
+      <label>Category <input name="category" required></label>
+      <label>Name <input name="name" required></label>
+      <button type="submit">Add product</button>
+    </form>
+  </section>
+  <section class="panel">
+    <h2>Sources</h2>
+    {% for source in sources %}<p>{{ source.name }}</p>{% endfor %}
+    <form method="post" class="row">{% csrf_token %}<input type="hidden" name="form" value="source"><input name="name" placeholder="Source" required><button type="submit">Add</button></form>
+  </section>
+  <section class="panel">
+    <h2>Statuses</h2>
+    {% for status in statuses %}<p>{{ status.entity }} · {{ status.name }}</p>{% endfor %}
+    <form method="post" class="row">{% csrf_token %}<input type="hidden" name="form" value="status">
+      <select name="entity"><option value="lead">lead</option><option value="loan">loan</option></select>
+      <input name="name" placeholder="Status" required><button type="submit">Add</button>
+    </form>
+  </section>
+  <section class="panel">
+    <h2>Territories</h2>
+    {% for place in territories %}<p>{{ place.city }}, {{ place.district }}, {{ place.state }}</p>{% endfor %}
+    <form method="post" class="grid three">{% csrf_token %}<input type="hidden" name="form" value="territory">
+      <input name="state" placeholder="State" required><input name="district" placeholder="District" required><input name="city" placeholder="City" required>
+      <button type="submit">Add territory</button>
+    </form>
+  </section>
+  <section class="panel">
+    <h2>Campaigns</h2>
+    {% for campaign in campaigns %}<p>{{ campaign.name }} · {{ campaign.source }} · {{ campaign.spend|inr }}</p>{% endfor %}
+    <form method="post" class="grid three">{% csrf_token %}<input type="hidden" name="form" value="campaign">
+      <input name="name" placeholder="Campaign" required><input name="source" placeholder="Source" required><input name="spend" placeholder="Spend">
+      <button type="submit">Add campaign</button>
+    </form>
+  </section>
+{% endblock %}

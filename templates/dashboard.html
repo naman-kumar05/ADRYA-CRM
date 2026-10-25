@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% load crm_tags %}
+{% block title %}Dashboard · ADYRA CRM{% endblock %}
+{% block content %}
+  <h1>Today</h1>
+  <div class="kpis">
+    {% for label, value in kpis %}
+      <article class="card kpi"><span class="muted">{{ label }}</span><strong>{{ value }}</strong></article>
+    {% endfor %}
+  </div>
+  <div class="panels">
+    <section class="panel">
+      <h2>Funnel</h2>
+      {% for label, value in funnel %}
+        <p class="spread"><span>{{ label }}</span><strong>{{ value }}</strong></p>
+      {% endfor %}
+    </section>
+    <section class="panel">
+      <h2>By product group</h2>
+      {% for row in by_category %}
+        <p class="spread"><span>{{ row.label }}</span><strong>{{ row.value }}</strong></p>
+        <div class="bar"><span style="width: {% widthratio row.value by_category.0.value 100 %}%"></span></div>
+      {% empty %}<p class="muted">No leads yet.</p>{% endfor %}
+    </section>
+    <section class="panel">
+      <h2>By source</h2>
+      {% for row in by_source %}
+        <p class="spread"><span>{{ row.label }}</span><strong>{{ row.value }}</strong></p>
+      {% empty %}<p class="muted">No leads yet.</p>{% endfor %}
+    </section>
+    <section class="panel">
+      <h2>Quiet for 48 hours</h2>
+      {% for lead in quiet %}
+        <p><a href="{% url 'lead-detail' lead.id %}">{{ lead.code }}</a> · {{ lead.customer.name }} · {{ lead.pipeline_stage }}</p>
+      {% empty %}<p class="muted">Every open file has moved in the last 48 hours.</p>{% endfor %}
+    </section>
+    <section class="panel">
+      <h2>Follow-ups</h2>
+      {% for item in due %}
+        <p>{{ item.due_at|date:"d M, H:i" }} · {{ item.type }} · {{ item.lead.code }} · {{ item.lead.customer.name }}</p>
+      {% empty %}<p class="muted">Nothing due.</p>{% endfor %}
+    </section>
+    {% if show_payouts %}
+      <section class="panel">
+        <h2>Payouts</h2>
+        <p>Expected {{ expected|inr }}</p>
+        <p>Received {{ received|inr }}</p>
+        <p class="muted">{{ pending_docs }} loan documents still pending or rejected.</p>
+      </section>
+    {% endif %}
+  </div>
+{% endblock %}

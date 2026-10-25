@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Alerts · ADYRA CRM{% endblock %}
+{% block content %}
+  <div class="spread">
+    <h1>Alerts</h1>
+    <form method="post">{% csrf_token %}<button type="submit">Mark all read</button></form>
+  </div>
+  {% for item in rows %}
+    <article class="card">
+      <strong>{{ item.title }}</strong>
+      <p>{{ item.body }}</p>
+      {% if item.href %}<p><a href="{{ item.href }}">Open</a></p>{% endif %}
+      <p class="muted">{{ item.created_at|date:"d M Y, H:i" }}{% if not item.read %} · unread{% endif %}</p>
+    </article>
+  {% empty %}<p class="muted">No alerts.</p>{% endfor %}
+{% endblock %}

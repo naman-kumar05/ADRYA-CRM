@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Dealers · ADYRA CRM{% endblock %}
+{% block content %}
+  <h1>Dealers</h1>
+  <div class="list">
+    {% for dealer in dealers %}
+      <article class="card">
+        <a href="{% url 'dealer-detail' dealer.id %}"><strong>{{ dealer.company_name }}</strong></a>
+        <p>{{ dealer.code }} · {{ dealer.contact_name }} · {{ dealer.mobile }} · {{ dealer.city }} · {{ dealer.status }}</p>
+      </article>
+    {% endfor %}
+  </div>
+  {% if can_write %}
+    <h2>Add a dealer</h2>
+    <form method="post" class="grid two">
+      {% csrf_token %}
+      <label>Company <input name="company_name" required></label>
+      <label>Contact <input name="contact_name" required></label>
+      <label>Mobile <input name="mobile" required></label>
+      <label>Email <input name="email" type="email"></label>
+      <label>Brands <input name="brands" placeholder="Mahindra, Sonalika"></label>
+      <label>Products <input name="products" placeholder="Tractor, Used Tractor"></label>
+      <label>State <input name="state" required></label>
+      <label>District <input name="district" required></label>
+      <label>City <input name="city" required></label>
+      <label>Territory <input name="territory"></label>
+      <label>Status
+        <select name="status">{% for status in statuses %}<option>{{ status }}</option>{% endfor %}</select>
+      </label>
+      <label>Payout terms <textarea name="payout_terms"></textarea></label>
+      <button type="submit">Save dealer</button>
+    </form>
+  {% endif %}
+{% endblock %}

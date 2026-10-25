@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Vendors · ADYRA CRM{% endblock %}
+{% block content %}
+  <h1>Vendors</h1>
+  <div class="list">
+    {% for vendor in vendors %}
+      <article class="card">
+        <strong>{{ vendor.company_name }}</strong>
+        <p>{{ vendor.code }} · {{ vendor.contact_name }} · {{ vendor.mobile }} · {{ vendor.city }} · {{ vendor.status }}</p>
+      </article>
+    {% endfor %}
+  </div>
+  {% if can_write %}
+    <h2>Add a vendor</h2>
+    <form method="post" class="grid two">
+      {% csrf_token %}
+      <label>Company <input name="company_name" required></label>
+      <label>Contact <input name="contact_name" required></label>
+      <label>Mobile <input name="mobile" required></label>
+      <label>Email <input name="email" type="email"></label>
+      <label>Products <input name="products" placeholder="Solar Pump, Residential Solar"></label>
+      <label>Service area <input name="service_area"></label>
+      <label>State <input name="state" required></label>
+      <label>District <input name="district" required></label>
+      <label>City <input name="city" required></label>
+      <label>Payout terms <textarea name="payout_terms"></textarea></label>
+      <button type="submit">Save vendor</button>
+    </form>
+  {% endif %}
+{% endblock %}

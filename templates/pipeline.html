@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Pipeline · ADYRA CRM{% endblock %}
+{% block content %}
+  <div class="spread">
+    <h1>Pipeline</h1>
+  </div>
+  <form class="search" method="get">
+    <input name="q" value="{{ q }}" placeholder="Search name or mobile">
+    <button type="submit">Search</button>
+  </form>
+  <div class="board">
+    {% for column in columns %}
+      <section class="panel stage" id="stage-{{ column.stage|slugify }}">
+        <h2>{{ column.stage }}</h2>
+        <p class="muted">{{ column.leads|length }}</p>
+        {% for lead in column.leads %}
+          <article class="card lead-card">
+            <a href="{% url 'lead-detail' lead.id %}"><strong>{{ lead.customer.name }}</strong></a>
+            <span>{{ lead.code }} · {{ lead.product_name }}</span>
+            <span class="badge {{ lead.priority|lower }}">{{ lead.priority }}</span>
+            <a class="button light" href="tel:+91{{ lead.customer.mobile }}">Call</a>
+            {% if can_move %}
+              <form method="post" action="{% url 'move-stage' lead.id %}">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                <div class="chips">
+                  {% for stage in stages %}
+                    <button class="{% if stage == lead.pipeline_stage %}secondary{% else %}light{% endif %}" name="pipeline_stage" value="{{ stage }}" type="submit">{{ stage }}</button>
+                  {% endfor %}
+                </div>
+              </form>
+            {% endif %}
+          </article>
+        {% empty %}
+          <p class="muted">Empty</p>
+        {% endfor %}
+      </section>
+    {% endfor %}
+  </div>
+{% endblock %}

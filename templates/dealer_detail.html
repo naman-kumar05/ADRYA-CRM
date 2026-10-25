@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}{{ dealer.company_name }} · ADYRA CRM{% endblock %}
+{% block content %}
+  <p class="muted">{{ dealer.code }} · {{ dealer.status }}</p>
+  <h1>{{ dealer.company_name }}</h1>
+  <p>{{ dealer.contact_name }} · <a href="{{ tel }}">{{ dealer.mobile }}</a></p>
+  <p>{{ dealer.city }}, {{ dealer.district }}, {{ dealer.state }}</p>
+  <p>{{ dealer.payout_terms }}</p>
+  <h2>Leads</h2>
+  {% for lead in leads %}
+    <p><a href="{% url 'lead-detail' lead.id %}">{{ lead.code }}</a> · {{ lead.customer.name }} · {{ lead.dealer_status }}</p>
+  {% empty %}<p class="muted">No leads for this dealer in your view.</p>{% endfor %}
+{% endblock %}
