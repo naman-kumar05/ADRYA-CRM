@@ -31,6 +31,9 @@ def require(request, action=None):
 
 
 def client_ip(request):
+    forwarded = request.META.get("HTTP_X_FORWARDED_FOR") or ""
+    if forwarded:
+        return forwarded.split(",")[0].strip()[:64]
     return (request.META.get("REMOTE_ADDR") or "")[:64]
 
 

@@ -5,17 +5,21 @@ from decimal import Decimal
 from pathlib import Path
 
 from django.conf import settings
+from django.core.files.storage import default_storage
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 
 from .access import can, followup_scope, lead_scope, loan_scope
 from .constants import (
+    DEALER_STATUSES,
     DISBURSEMENT_PLUS,
     DOCUMENT_TYPES,
     DSA_CHECKLIST,
     DSA_PIPELINE,
     DSA_REQUIRED_DOCS,
+    FOLLOWUP_TYPES,
+    PARTNER_TYPES,
     READY_DOC_STATUSES,
     STALE_FILE_HOURS,
     STATUS_FOR_STAGE,
@@ -24,6 +28,7 @@ from .models import (
     AuditLog,
     Counter,
     Customer,
+    Dealer,
     Document,
     FinancePartner,
     FollowUp,
@@ -33,6 +38,7 @@ from .models import (
     Payout,
     Requirement,
     StatusEvent,
+    Vendor,
 )
 
 ALLOWED_MIME = {"application/pdf", "image/jpeg", "image/png", "image/webp"}
@@ -66,10 +72,12 @@ def write_audit(user, entity, entity_id, action, changes=None):
 def next_code(key, prefix, width):
     year = timezone.localdate().year
     counter_id = f"{key}-{year}"
-    Counter.objects.get_or_create(id=counter_id, defaults={"value": 0})
-    row = Counter.objects.select_for_update().get(id=counter_id)
-    row.value += 1
-    row.save(update_fields=["value"])
+    with transaction.atomic():
+        row, _ = Counter.objects.select_for_update().get_or_create(
+            id=counter_id, defaults={"value": 0}
+        )
+        row.value += 1
+        row.save(update_fields=["value"])
     return f"{prefix}-{year}-{row.value:0{width}d}"
 
 
@@ -114,6 +122,7 @@ def missing_required_docs(documents):
 
 
 def infer_pipeline_stage(lead):
+    """Infer pipeline stage from current loan case statuses. Used to auto-advance after loan updates."""
     loan_statuses = list(lead.loan_cases.values_list("status", flat=True))
     if any(status in DISBURSEMENT_PLUS for status in loan_statuses):
         return "Disbursed"
@@ -124,6 +133,25 @@ def infer_pipeline_stage(lead):
     if lead.status in {"Documents Pending", "Documents Received"}:
         return "Documents Collected"
     return "Lead Inbound"
+
+
+def _advance_lead_pipeline(lead):
+    """Auto-advance lead pipeline stage when loan status changes push it forward."""
+    inferred = infer_pipeline_stage(lead)
+    try:
+        current_idx = DSA_PIPELINE.index(lead.pipeline_stage)
+    except ValueError:
+        current_idx = -1
+    try:
+        inferred_idx = DSA_PIPELINE.index(inferred)
+    except ValueError:
+        return
+    if inferred_idx > current_idx:
+        lead.pipeline_stage = inferred
+        lead.stage_updated_at = timezone.now()
+        lead.save(update_fields=["pipeline_stage", "stage_updated_at", "updated_at"])
+        write_audit(None, "lead", lead.id, "lead.pipeline.auto",
+                    [{"field": "pipelineStage", "old": DSA_PIPELINE[current_idx], "new": inferred}])
 
 
 def ensure_lead_checklist(lead):
@@ -147,20 +175,23 @@ def ensure_stale_reminders(actor):
     leads = Lead.objects.filter(lead_scope(actor)).filter(
         stage_updated_at__lt=stale_cutoff(),
     ).exclude(pipeline_stage="Disbursed").exclude(status__in=["Not Interested", "Closed"]).distinct()
-    created = 0
+    to_create = []
     for lead in leads:
         open_reminder = FollowUp.objects.filter(lead=lead, completed_at__isnull=True, notes__startswith="[48h]").exists()
         if open_reminder:
             continue
-        FollowUp.objects.create(
-            lead=lead,
-            assignee=lead.assigned_to or actor,
-            type="Call",
-            due_at=timezone.now(),
-            notes=f"[48h] {lead.code} has not moved in 48 hours. Call the customer or check the aggregator portal.",
+        to_create.append(
+            FollowUp(
+                lead=lead,
+                assignee=lead.assigned_to or actor,
+                type="Call",
+                due_at=timezone.now(),
+                notes=f"[48h] {lead.code} has not moved in 48 hours. Call the customer or check the aggregator portal.",
+            )
         )
-        created += 1
-    return created
+    if to_create:
+        FollowUp.objects.bulk_create(to_create)
+    return len(to_create)
 
 
 def _customer_for_lead(data):
@@ -255,7 +286,7 @@ def create_lead_record(actor, data):
             f"lead.create.{choice}" if choice else "lead.create",
             [{"field": "status", "old": None, "new": "New"}],
         )
-        if assignee_id and assignee_id != actor.id:
+        if assignee_id and str(assignee_id) != str(actor.id):
             Notification.objects.create(
                 user_id=assignee_id,
                 title="New lead assigned",
@@ -327,8 +358,28 @@ def bulk_assign(actor, lead_ids, assignee_id):
     if not assignee_id:
         return {"ok": False, "error": "Choose a person."}
     leads = list(Lead.objects.filter(pk__in=lead_ids).filter(lead_scope(actor)).distinct())
-    for lead in leads:
-        update_lead_record(actor, lead.id, {"assigned_to_id": assignee_id})
+    if not leads:
+        return {"ok": True, "count": 0}
+    with transaction.atomic():
+        Lead.objects.filter(pk__in=[lead.id for lead in leads]).update(
+            assigned_to_id=assignee_id,
+            updated_at=timezone.now(),
+        )
+        write_audit(
+            actor,
+            "lead",
+            "bulk",
+            "lead.bulk_assign",
+            [{"field": "assignedTo", "new": str(assignee_id)}],
+        )
+        codes = ", ".join(lead.code for lead in leads[:5])
+        suffix = "…" if len(leads) > 5 else ""
+        Notification.objects.create(
+            user_id=assignee_id,
+            title=f"{len(leads)} lead{'s' if len(leads) != 1 else ''} assigned to you",
+            body=f"{codes}{suffix}",
+            href="/leads/",
+        )
     return {"ok": True, "count": len(leads)}
 
 
@@ -382,7 +433,7 @@ def log_interaction(actor, lead_id, kind, result, notes):
     FollowUp.objects.create(
         lead=lead,
         assignee=actor,
-        type="WhatsApp" if kind == "WhatsApp" else kind if kind in {"Call", "WhatsApp"} else "Call",
+        type=kind if kind in FOLLOWUP_TYPES else "Call",
         due_at=timezone.now(),
         completed_at=timezone.now(),
         result=result,
@@ -433,7 +484,7 @@ def create_loan_case(actor, data):
 def update_loan_case(actor, loan_id, data):
     if not can(actor.role, "loans.update"):
         return {"ok": False, "error": "You cannot update finance cases."}
-    loan = LoanCase.objects.filter(pk=loan_id).filter(loan_scope(actor)).distinct().first()
+    loan = LoanCase.objects.filter(pk=loan_id).filter(loan_scope(actor)).select_related("lead").distinct().first()
     if not loan:
         return {"ok": False, "error": "Loan case not found."}
     status = data["status"]
@@ -483,6 +534,11 @@ def update_loan_case(actor, loan_id, data):
                 "loan.status",
                 [{"field": "status", "old": previous, "new": status}],
             )
+    if loan.lead_id and previous != status:
+        try:
+            _advance_lead_pipeline(loan.lead)
+        except Exception:
+            pass
     return {"ok": True}
 
 
@@ -530,12 +586,6 @@ def save_payout(actor, data):
     return {"ok": True, "id": payout.id, "net": net}
 
 
-def _storage_root():
-    root = Path(settings.BASE_DIR) / "storage"
-    root.mkdir(parents=True, exist_ok=True)
-    return root.resolve()
-
-
 def store_upload(folder, upload):
     if upload.size > 8 * 1024 * 1024:
         raise ValueError("File must be 8 MB or smaller.")
@@ -545,27 +595,10 @@ def store_upload(folder, upload):
     name = Path(upload.name or "file").name
     name = re.sub(r"[^A-Za-z0-9._-]", "_", name)[:80] or "file"
     if ".." in folder or folder.startswith("/"):
-        raise ValueError("Invalid storage key")
+        raise ValueError("Invalid storage folder")
     key = f"{folder}/{uuid.uuid4().hex}-{name}"
-    root = _storage_root()
-    destination = (root / key).resolve()
-    if root not in destination.parents:
-        raise ValueError("Invalid storage key")
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    with destination.open("wb") as handle:
-        for chunk in upload.chunks():
-            handle.write(chunk)
-    return key, name, mime, upload.size
-
-
-def stored_file_path(key):
-    if not key or ".." in key or key.startswith("/"):
-        raise ValueError("Invalid storage key")
-    root = _storage_root()
-    full = (root / key).resolve()
-    if root not in full.parents and full != root:
-        raise ValueError("Invalid storage key")
-    return full
+    saved_key = default_storage.save(key, upload)
+    return saved_key, name, mime, upload.size
 
 
 def save_checklist_document(actor, lead_id, doc_type, status, upload=None, notes=""):
@@ -583,9 +616,9 @@ def save_checklist_document(actor, lead_id, doc_type, status, upload=None, notes
     document.notes = notes or document.notes
     document.uploaded_by = actor
     if upload:
-        key, name, mime, size = store_upload(f"leads/{lead.id}", upload)
+        key, file_name, mime, size = store_upload(f"leads/{lead.id}", upload)
         document.storage_key = key
-        document.file_name = name
+        document.file_name = file_name
         document.mime_type = mime
         document.size_bytes = size
         document.version = (document.version or 1) + (1 if document.pk else 0)
@@ -608,9 +641,9 @@ def save_loan_document(actor, loan_id, doc_type, status, upload=None, notes=""):
     document.notes = notes or document.notes
     document.uploaded_by = actor
     if upload:
-        key, name, mime, size = store_upload(f"loans/{loan.id}", upload)
+        key, file_name, mime, size = store_upload(f"loans/{loan.id}", upload)
         document.storage_key = key
-        document.file_name = name
+        document.file_name = file_name
         document.mime_type = mime
         document.size_bytes = size
         document.version = (document.version or 1) + (1 if document.pk else 0)
@@ -659,3 +692,93 @@ def complete_followup(actor, followup_id, result, notes):
         item.notes = notes
     item.save(update_fields=["completed_at", "result", "notes"])
     return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# Entity creation (moved from views.py for reuse and testability)
+# ---------------------------------------------------------------------------
+
+def create_dealer(actor, data):
+    if not can(actor.role, "dealers.write"):
+        return {"ok": False, "error": "You cannot add dealers."}
+    company = (data.get("company_name") or "").strip()
+    contact = (data.get("contact_name") or "").strip()
+    if len(company) < 2 or len(contact) < 2:
+        raise ValueError("Company and contact name are required.")
+    with transaction.atomic():
+        dealer = Dealer.objects.create(
+            code=next_code("dealer", "ADY-DL", 4),
+            company_name=company,
+            brands=data.get("brands") or [],
+            contact_name=contact,
+            mobile=data.get("mobile") or "",
+            email=data.get("email") or "",
+            state=data.get("state") or "",
+            district=data.get("district") or "",
+            city=data.get("city") or "",
+            territory=data.get("territory") or "",
+            products=data.get("products") or [],
+            agreement_status=data.get("agreement_status") or "Pending",
+            payout_terms=data.get("payout_terms") or "",
+            status=data.get("status") if data.get("status") in DEALER_STATUSES else "New",
+        )
+        write_audit(actor, "dealer", dealer.id, "dealer.create", [{"field": "company", "new": company}])
+    return {"ok": True, "id": dealer.id, "code": dealer.code}
+
+
+def create_vendor(actor, data):
+    if not can(actor.role, "vendors.write"):
+        return {"ok": False, "error": "You cannot add vendors."}
+    company = (data.get("company_name") or "").strip()
+    if len(company) < 2:
+        raise ValueError("Company name is required.")
+    with transaction.atomic():
+        vendor = Vendor.objects.create(
+            code=next_code("vendor", "ADY-VN", 4),
+            company_name=company,
+            contact_name=data.get("contact_name") or "",
+            mobile=data.get("mobile") or "",
+            email=data.get("email") or "",
+            service_area=data.get("service_area") or "",
+            products=data.get("products") or [],
+            capacity=data.get("capacity") or "",
+            install_capability=data.get("install_capability") or "",
+            pricing_reference=data.get("pricing_reference") or "",
+            payout_terms=data.get("payout_terms") or "",
+            status="Active",
+            state=data.get("state") or "",
+            district=data.get("district") or "",
+            city=data.get("city") or "",
+        )
+        write_audit(actor, "vendor", vendor.id, "vendor.create", [{"field": "company", "new": company}])
+    return {"ok": True, "id": vendor.id, "code": vendor.code}
+
+
+def create_partner(actor, data):
+    if not can(actor.role, "partners.write"):
+        return {"ok": False, "error": "You cannot add finance partners."}
+    name = (data.get("name") or "").strip()
+    if len(name) < 2:
+        raise ValueError("Partner name is required.")
+    minimum = data.get("amount_min")
+    maximum = data.get("amount_max")
+    if minimum is None or maximum is None:
+        raise ValueError("Enter the minimum and maximum amount.")
+    with transaction.atomic():
+        partner = FinancePartner.objects.create(
+            code=next_code("partner", "ADY-FP", 4),
+            name=name,
+            partner_type=data.get("partner_type") if data.get("partner_type") in PARTNER_TYPES else "Other",
+            products=data.get("products") or [],
+            states=data.get("states") or [],
+            loan_types=data.get("loan_types") or [],
+            amount_min=minimum,
+            amount_max=maximum,
+            document_checklist=data.get("document_checklist") or "",
+            rm_name=data.get("rm_name") or "",
+            rm_mobile=data.get("rm_mobile") or "",
+            payout_terms=data.get("payout_terms") or "",
+            status="Active",
+        )
+        write_audit(actor, "partner", partner.id, "partner.create", [{"field": "name", "new": name}])
+    return {"ok": True, "id": partner.id, "code": partner.code}

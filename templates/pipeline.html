@@ -1,24 +1,50 @@
 {% extends "base.html" %}
 {% block title %}Pipeline · ADYRA CRM{% endblock %}
 {% block content %}
-  <div class="spread">
+
+<div class="page-header spread">
+  <div>
     <h1>Pipeline</h1>
+    <p>Manage leads through each stage of the DSA workflow.</p>
   </div>
-  <form class="search" method="get">
-    <input name="q" value="{{ q }}" placeholder="Search name or mobile">
-    <button type="submit">Search</button>
-  </form>
-  <div class="board">
-    {% for column in columns %}
-      <section class="panel stage" id="stage-{{ column.stage|slugify }}">
+  <a href="{% url 'lead-new' %}" class="button">+ New Lead</a>
+</div>
+
+<form class="search" method="get">
+  <input name="q" value="{{ q }}" placeholder="Search by name, mobile, or code…">
+  <button type="submit">Search</button>
+  {% if q %}<a href="{% url 'pipeline' %}" class="button secondary">Clear</a>{% endif %}
+</form>
+
+{# ── Stage summary strip ─────────────────────────────────────────────── #}
+<div style="display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;">
+  {% for column in columns %}
+    <a href="#stage-{{ column.stage|slugify }}"
+       style="flex:1;min-width:120px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:10px 14px;text-align:center;color:var(--text-2);transition:all .15s;"
+       onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+      <strong style="display:block;font-size:20px;font-weight:800;color:{% if column.leads|length > 0 %}var(--accent){% else %}var(--muted){% endif %};">{{ column.leads|length }}</strong>
+      <span style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;">{{ column.stage }}</span>
+    </a>
+  {% endfor %}
+</div>
+
+<div class="board">
+  {% for column in columns %}
+    <section class="stage" id="stage-{{ column.stage|slugify }}">
+      <div class="stage-head">
         <h2>{{ column.stage }}</h2>
-        <p class="muted">{{ column.leads|length }}</p>
+        <span class="stage-count {% if column.leads|length > 0 %}has-items{% endif %}">{{ column.leads|length }}</span>
+      </div>
+      <div class="stage-body">
         {% for lead in column.leads %}
           <article class="card lead-card">
-            <a href="{% url 'lead-detail' lead.id %}"><strong>{{ lead.customer.name }}</strong></a>
+            <a href="{% url 'lead-detail' lead.id %}">{{ lead.customer.name }}</a>
             <span>{{ lead.code }} · {{ lead.product_name }}</span>
-            <span class="badge {{ lead.priority|lower }}">{{ lead.priority }}</span>
-            <a class="button light" href="tel:+91{{ lead.customer.mobile }}">Call</a>
+            <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+              <span class="badge {{ lead.priority|lower }}">{{ lead.priority }}</span>
+              {% if lead.loan_required %}<span class="badge blue">Loan</span>{% endif %}
+            </div>
+            <a class="button light sm" href="tel:+91{{ lead.customer.mobile }}">&#9742; Call</a>
             {% if can_move %}
               <form method="post" action="{% url 'move-stage' lead.id %}">
                 {% csrf_token %}
@@ -32,9 +58,10 @@
             {% endif %}
           </article>
         {% empty %}
-          <p class="muted">Empty</p>
+          <p class="muted" style="text-align:center;padding:24px 0;font-size:13px;">Empty</p>
         {% endfor %}
-      </section>
-    {% endfor %}
-  </div>
+      </div>
+    </section>
+  {% endfor %}
+</div>
 {% endblock %}

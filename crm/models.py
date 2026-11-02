@@ -60,6 +60,10 @@ class LoginHistory(models.Model):
     class Meta:
         indexes = [models.Index(fields=["email"]), models.Index(fields=["created_at"])]
 
+    def __str__(self):
+        status = "OK" if self.success else "FAIL"
+        return f"{self.email} [{status}]"
+
 
 class Customer(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -94,11 +98,17 @@ class Product(models.Model):
         constraints = [models.UniqueConstraint(fields=["category", "name"], name="uniq_product")]
         ordering = ["category", "name"]
 
+    def __str__(self):
+        return f"{self.category} / {self.name}"
+
 
 class LeadSource(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=80, unique=True)
     active = models.BooleanField(default=True)
+
+    def __str__(self):
+        return self.name
 
 
 class StatusOption(models.Model):
@@ -112,6 +122,9 @@ class StatusOption(models.Model):
         constraints = [models.UniqueConstraint(fields=["entity", "name"], name="uniq_status")]
         ordering = ["entity", "sort", "name"]
 
+    def __str__(self):
+        return f"{self.entity}: {self.name}"
+
 
 class Territory(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -122,6 +135,9 @@ class Territory(models.Model):
     class Meta:
         constraints = [models.UniqueConstraint(fields=["state", "district", "city"], name="uniq_territory")]
         ordering = ["state", "district", "city"]
+
+    def __str__(self):
+        return f"{self.city}, {self.district}, {self.state}"
 
 
 class Campaign(models.Model):
@@ -134,6 +150,9 @@ class Campaign(models.Model):
 
     class Meta:
         indexes = [models.Index(fields=["source"])]
+
+    def __str__(self):
+        return self.name
 
 
 class Dealer(models.Model):
@@ -237,6 +256,9 @@ class Requirement(models.Model):
             models.Index(fields=["category"]),
         ]
 
+    def __str__(self):
+        return f"{self.code} · {self.product_name}"
+
 
 class Lead(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -284,6 +306,9 @@ class Lead(models.Model):
         ]
         ordering = ["-created_at"]
 
+    def __str__(self):
+        return f"{self.code} · {self.customer}"
+
 
 class LoanCase(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -320,6 +345,9 @@ class LoanCase(models.Model):
         ]
         ordering = ["-created_at"]
 
+    def __str__(self):
+        return f"{self.code} · {self.customer}"
+
 
 class StatusEvent(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -333,6 +361,9 @@ class StatusEvent(models.Model):
     class Meta:
         indexes = [models.Index(fields=["loan_case"])]
         ordering = ["created_at"]
+
+    def __str__(self):
+        return f"{self.loan_case.code}: {self.from_status} → {self.to_status}"
 
 
 class Document(models.Model):
@@ -357,6 +388,9 @@ class Document(models.Model):
             models.Index(fields=["doc_type"]),
         ]
 
+    def __str__(self):
+        return f"{self.doc_type} [{self.status}]"
+
 
 class FollowUp(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -379,6 +413,10 @@ class FollowUp(models.Model):
         ]
         ordering = ["due_at"]
 
+    def __str__(self):
+        ref = self.lead or self.loan_case
+        return f"{self.type} · {ref} · {self.due_at:%Y-%m-%d}"
+
 
 class Payout(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -400,6 +438,9 @@ class Payout(models.Model):
     class Meta:
         indexes = [models.Index(fields=["status"]), models.Index(fields=["loan_case"])]
 
+    def __str__(self):
+        return f"{self.loan_case.code} · {self.partner_name} [{self.status}]"
+
 
 class Notification(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -413,6 +454,9 @@ class Notification(models.Model):
     class Meta:
         indexes = [models.Index(fields=["user", "read"])]
         ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.user} · {self.title}"
 
 
 class AuditLog(models.Model):
@@ -434,7 +478,13 @@ class AuditLog(models.Model):
         ]
         ordering = ["-created_at"]
 
+    def __str__(self):
+        return f"{self.entity}/{self.entity_id} · {self.action}"
+
 
 class Counter(models.Model):
     id = models.CharField(primary_key=True, max_length=40)
     value = models.PositiveIntegerField(default=0)
+
+    def __str__(self):
+        return f"{self.id}={self.value}"

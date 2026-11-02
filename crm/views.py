@@ -5,6 +5,10 @@ from datetime import timedelta
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import login, logout
+from django.core.files.storage import default_storage
+from django.core.paginator import Paginator
+from django.db import connection
+from django.db.models.functions import TruncDate, TruncWeek
 from django.db.models import Count, Q, Sum
 from django.http import FileResponse, Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -69,9 +73,12 @@ from .phone import fill_template, tel_href, whatsapp_href
 from .services import (
     bulk_assign,
     complete_followup,
+    create_dealer,
     create_followup,
     create_lead_record,
     create_loan_case,
+    create_partner,
+    create_vendor,
     ensure_lead_checklist,
     ensure_stale_reminders,
     log_interaction,
@@ -82,10 +89,29 @@ from .services import (
     save_loan_document,
     save_payout,
     stale_cutoff,
-    stored_file_path,
     update_lead_record,
     update_loan_case,
 )
+
+PAGE_SIZE = 50
+
+
+def _paginate(queryset, request, page_size=PAGE_SIZE):
+    paginator = Paginator(queryset, page_size)
+    return paginator.get_page(request.GET.get("page") or 1)
+
+
+def health(request):
+    try:
+        connection.ensure_connection()
+        db_ok = True
+    except Exception:
+        db_ok = False
+    status_code = 200 if db_ok else 503
+    return JsonResponse(
+        {"status": "ok" if db_ok else "error", "db": "ok" if db_ok else "error"},
+        status=status_code,
+    )
 
 
 def home(request):
@@ -165,20 +191,48 @@ def dashboard(request):
         .select_related("customer")
         .distinct()[:6]
     )
+    by_category_list = [{"label": row["category"], "value": row["value"]} for row in by_category]
+    by_source_list = [{"label": row["source"], "value": row["value"]} for row in by_source]
+
+    # Chart data — last 10 weeks weekly trend
+    ten_weeks_ago = now - timedelta(weeks=10)
+    weekly_qs = (
+        leads
+        .filter(created_at__gte=ten_weeks_ago)
+        .annotate(wk=TruncWeek("created_at"))
+        .values("wk")
+        .annotate(n=Count("id", distinct=True))
+        .order_by("wk")
+    )
+    chart_weekly = {"labels": [], "values": []}
+    for row in weekly_qs:
+        chart_weekly["labels"].append(row["wk"].strftime("%-d %b"))
+        chart_weekly["values"].append(row["n"])
+
+    pipeline_counts = [leads.filter(pipeline_stage=s).count() for s in DSA_PIPELINE]
+    chart_pipeline = {"labels": list(DSA_PIPELINE), "values": pipeline_counts}
+    chart_category = {"labels": [r["label"] for r in by_category_list], "values": [r["value"] for r in by_category_list]}
+    chart_source = {"labels": [r["label"] for r in by_source_list[:7]], "values": [r["value"] for r in by_source_list[:7]]}
+
     return render(
         request,
         "dashboard.html",
         {
             "kpis": kpis,
             "funnel": funnel,
-            "by_category": [{"label": row["category"], "value": row["value"]} for row in by_category],
-            "by_source": [{"label": row["source"], "value": row["value"]} for row in by_source],
+            "by_category": by_category_list,
+            "by_source": by_source_list,
             "expected": expected,
             "received": received,
             "pending_docs": Document.objects.filter(status__in=["Pending", "Rejected"], loan_case_id__in=loan_ids).count(),
             "due": due,
             "quiet": quiet,
             "show_payouts": can(user.role, "payouts.read"),
+            "chart_weekly_json": json.dumps(chart_weekly),
+            "chart_pipeline_json": json.dumps(chart_pipeline),
+            "chart_category_json": json.dumps(chart_category),
+            "chart_source_json": json.dumps(chart_source),
+            "now": now,
         },
     )
 
@@ -210,15 +264,27 @@ def leads(request):
         messages.success(request, f"Assigned {result.get('count', 0)} leads.") if result.get("ok") else messages.error(request, result["error"])
         return redirect("leads")
     q = (request.GET.get("q") or "").strip()
+    status_filter = (request.GET.get("status") or "").strip()
+    priority_filter = (request.GET.get("priority") or "").strip()
     rows = Lead.objects.filter(lead_scope(request.user)).select_related("customer", "assigned_to").distinct()
     if q:
         rows = rows.filter(Q(customer__name__icontains=q) | Q(customer__mobile__icontains=q) | Q(code__icontains=q))
+    if status_filter:
+        rows = rows.filter(status=status_filter)
+    if priority_filter:
+        rows = rows.filter(priority=priority_filter)
+    page = _paginate(rows, request)
     return render(
         request,
         "leads.html",
         {
-            "leads": rows[:80],
+            "leads": page,
+            "page_obj": page,
             "q": q,
+            "status_filter": status_filter,
+            "priority_filter": priority_filter,
+            "statuses": LEAD_STATUSES,
+            "priorities": PRIORITIES,
             "assignees": User.objects.filter(is_active=True, role__in=["SALES_EXECUTIVE", "SALES_MANAGER", "ADMIN"]),
             "can_assign": can(request.user.role, "leads.assign"),
         },
@@ -226,9 +292,8 @@ def leads(request):
 
 
 def _options():
-    products = list(Product.objects.filter(active=True))
     return {
-        "products": products,
+        "products": list(Product.objects.filter(active=True)),
         "sources": list(LeadSource.objects.filter(active=True)),
         "territories": list(Territory.objects.all()),
         "dealers": list(Dealer.objects.filter(status="Active")),
@@ -539,7 +604,8 @@ def customers(request):
     rows = Customer.objects.filter(customer_scope(request.user)).distinct()
     if q:
         rows = rows.filter(Q(name__icontains=q) | Q(mobile__icontains=q) | Q(code__icontains=q))
-    return render(request, "customers.html", {"customers": rows.order_by("-created_at")[:80], "q": q})
+    page = _paginate(rows.order_by("-created_at"), request)
+    return render(request, "customers.html", {"customers": page, "page_obj": page, "q": q})
 
 
 def customer_detail(request, customer_id):
@@ -559,8 +625,9 @@ def requirements(request):
         return denied
     if request.user.role not in {"SUPER_ADMIN", "ADMIN", "SALES_MANAGER", "SALES_EXECUTIVE", "FINANCE_MANAGER", "MANAGEMENT"}:
         return render(request, "forbidden.html", status=403)
-    rows = Requirement.objects.filter(requirement_scope(request.user)).select_related("customer").distinct()[:80]
-    return render(request, "requirements.html", {"requirements": rows})
+    rows = Requirement.objects.filter(requirement_scope(request.user)).select_related("customer").distinct()
+    page = _paginate(rows, request)
+    return render(request, "requirements.html", {"requirements": page, "page_obj": page})
 
 
 def dealers(request):
@@ -571,46 +638,37 @@ def dealers(request):
         if not can(request.user.role, "dealers.write"):
             return render(request, "forbidden.html", status=403)
         try:
-            _create_dealer(request)
+            post = request.POST
+            result = create_dealer(
+                request.user,
+                {
+                    "company_name": (post.get("company_name") or "").strip(),
+                    "contact_name": (post.get("contact_name") or "").strip(),
+                    "brands": split_list(post.get("brands")),
+                    "mobile": clean_mobile(post.get("mobile")),
+                    "email": (post.get("email") or "").strip(),
+                    "state": (post.get("state") or "").strip(),
+                    "district": (post.get("district") or "").strip(),
+                    "city": (post.get("city") or "").strip(),
+                    "territory": (post.get("territory") or "").strip(),
+                    "products": split_list(post.get("products")),
+                    "agreement_status": post.get("agreement_status") or "Pending",
+                    "payout_terms": (post.get("payout_terms") or "").strip(),
+                    "status": post.get("status"),
+                },
+            )
+            if result.get("ok"):
+                messages.success(request, "Dealer added.")
+            else:
+                messages.error(request, result["error"])
         except ValueError as exc:
             messages.error(request, str(exc))
-        else:
-            messages.success(request, "Dealer added.")
         return redirect("dealers")
     return render(
         request,
         "dealers.html",
         {"dealers": Dealer.objects.all(), "can_write": can(request.user.role, "dealers.write"), "statuses": DEALER_STATUSES},
     )
-
-
-def _create_dealer(request):
-    post = request.POST
-    company = (post.get("company_name") or "").strip()
-    contact = (post.get("contact_name") or "").strip()
-    if len(company) < 2 or len(contact) < 2:
-        raise ValueError("Company and contact name are required.")
-    from django.db import transaction
-
-    from .services import next_code
-
-    with transaction.atomic():
-        Dealer.objects.create(
-            code=next_code("dealer", "ADY-DL", 4),
-            company_name=company,
-            brands=split_list(post.get("brands")),
-            contact_name=contact,
-            mobile=clean_mobile(post.get("mobile")),
-            email=(post.get("email") or "").strip(),
-            state=(post.get("state") or "").strip(),
-            district=(post.get("district") or "").strip(),
-            city=(post.get("city") or "").strip(),
-            territory=(post.get("territory") or "").strip(),
-            products=split_list(post.get("products")),
-            agreement_status=post.get("agreement_status") or "Pending",
-            payout_terms=(post.get("payout_terms") or "").strip(),
-            status=post.get("status") if post.get("status") in DEALER_STATUSES else "New",
-        )
 
 
 def dealer_detail(request, dealer_id):
@@ -630,42 +688,33 @@ def vendors(request):
         if not can(request.user.role, "vendors.write"):
             return render(request, "forbidden.html", status=403)
         try:
-            _create_vendor(request)
+            post = request.POST
+            result = create_vendor(
+                request.user,
+                {
+                    "company_name": (post.get("company_name") or "").strip(),
+                    "contact_name": (post.get("contact_name") or "").strip(),
+                    "mobile": clean_mobile(post.get("mobile")),
+                    "email": (post.get("email") or "").strip(),
+                    "service_area": (post.get("service_area") or "").strip(),
+                    "products": split_list(post.get("products")),
+                    "capacity": (post.get("capacity") or "").strip(),
+                    "install_capability": (post.get("install_capability") or "").strip(),
+                    "pricing_reference": (post.get("pricing_reference") or "").strip(),
+                    "payout_terms": (post.get("payout_terms") or "").strip(),
+                    "state": (post.get("state") or "").strip(),
+                    "district": (post.get("district") or "").strip(),
+                    "city": (post.get("city") or "").strip(),
+                },
+            )
+            if result.get("ok"):
+                messages.success(request, "Vendor added.")
+            else:
+                messages.error(request, result["error"])
         except ValueError as exc:
             messages.error(request, str(exc))
-        else:
-            messages.success(request, "Vendor added.")
         return redirect("vendors")
     return render(request, "vendors.html", {"vendors": Vendor.objects.all(), "can_write": can(request.user.role, "vendors.write")})
-
-
-def _create_vendor(request):
-    post = request.POST
-    company = (post.get("company_name") or "").strip()
-    if len(company) < 2:
-        raise ValueError("Company name is required.")
-    from django.db import transaction
-
-    from .services import next_code
-
-    with transaction.atomic():
-        Vendor.objects.create(
-            code=next_code("vendor", "ADY-VN", 4),
-            company_name=company,
-            contact_name=(post.get("contact_name") or "").strip(),
-            mobile=clean_mobile(post.get("mobile")),
-            email=(post.get("email") or "").strip(),
-            service_area=(post.get("service_area") or "").strip(),
-            products=split_list(post.get("products")),
-            capacity=(post.get("capacity") or "").strip(),
-            install_capability=(post.get("install_capability") or "").strip(),
-            pricing_reference=(post.get("pricing_reference") or "").strip(),
-            payout_terms=(post.get("payout_terms") or "").strip(),
-            status="Active",
-            state=(post.get("state") or "").strip(),
-            district=(post.get("district") or "").strip(),
-            city=(post.get("city") or "").strip(),
-        )
 
 
 def partners(request):
@@ -676,48 +725,35 @@ def partners(request):
         if not can(request.user.role, "partners.write"):
             return render(request, "forbidden.html", status=403)
         try:
-            _create_partner(request)
+            post = request.POST
+            result = create_partner(
+                request.user,
+                {
+                    "name": (post.get("name") or "").strip(),
+                    "partner_type": post.get("partner_type"),
+                    "products": split_list(post.get("products")),
+                    "states": split_list(post.get("states")),
+                    "loan_types": split_list(post.get("loan_types")),
+                    "amount_min": money(post.get("amount_min")),
+                    "amount_max": money(post.get("amount_max")),
+                    "document_checklist": (post.get("document_checklist") or "").strip(),
+                    "rm_name": (post.get("rm_name") or "").strip(),
+                    "rm_mobile": (post.get("rm_mobile") or "").strip(),
+                    "payout_terms": (post.get("payout_terms") or "").strip(),
+                },
+            )
+            if result.get("ok"):
+                messages.success(request, "Finance partner added.")
+            else:
+                messages.error(request, result["error"])
         except ValueError as exc:
             messages.error(request, str(exc))
-        else:
-            messages.success(request, "Finance partner added.")
         return redirect("partners")
     return render(
         request,
         "partners.html",
         {"partners": FinancePartner.objects.all(), "can_write": can(request.user.role, "partners.write"), "types": PARTNER_TYPES},
     )
-
-
-def _create_partner(request):
-    post = request.POST
-    name = (post.get("name") or "").strip()
-    if len(name) < 2:
-        raise ValueError("Partner name is required.")
-    minimum = money(post.get("amount_min"))
-    maximum = money(post.get("amount_max"))
-    if minimum is None or maximum is None:
-        raise ValueError("Enter the minimum and maximum amount.")
-    from django.db import transaction
-
-    from .services import next_code
-
-    with transaction.atomic():
-        FinancePartner.objects.create(
-            code=next_code("partner", "ADY-FP", 4),
-            name=name,
-            partner_type=post.get("partner_type") if post.get("partner_type") in PARTNER_TYPES else "Other",
-            products=split_list(post.get("products")),
-            states=split_list(post.get("states")),
-            loan_types=split_list(post.get("loan_types")),
-            amount_min=minimum,
-            amount_max=maximum,
-            document_checklist=(post.get("document_checklist") or "").strip(),
-            rm_name=(post.get("rm_name") or "").strip(),
-            rm_mobile=(post.get("rm_mobile") or "").strip(),
-            payout_terms=(post.get("payout_terms") or "").strip(),
-            status="Active",
-        )
 
 
 def partner_detail(request, partner_id):
@@ -735,8 +771,12 @@ def loans(request):
         return denied
     if request.user.role == "DEALER":
         return render(request, "forbidden.html", status=403)
-    rows = LoanCase.objects.filter(loan_scope(request.user)).select_related("customer", "lender", "executive").distinct()[:80]
-    return render(request, "loans.html", {"loans": rows, "note": LENDER_DECISION_NOTE})
+    status_filter = (request.GET.get("status") or "").strip()
+    rows = LoanCase.objects.filter(loan_scope(request.user)).select_related("customer", "lender", "executive").distinct()
+    if status_filter:
+        rows = rows.filter(status=status_filter)
+    page = _paginate(rows, request)
+    return render(request, "loans.html", {"loans": page, "page_obj": page, "statuses": LOAN_STATUSES, "status_filter": status_filter, "note": LENDER_DECISION_NOTE})
 
 
 def loan_detail(request, loan_id):
@@ -868,12 +908,15 @@ def followups(request):
         return denied
     now = timezone.now()
     rows = FollowUp.objects.filter(followup_scope(request.user)).select_related("lead__customer", "assignee").distinct()
+    open_page = _paginate(rows.filter(completed_at__isnull=True).order_by("due_at"), request)
+    done = rows.filter(completed_at__isnull=False).order_by("-completed_at")[:20]
     return render(
         request,
         "followups.html",
         {
-            "open_items": rows.filter(completed_at__isnull=True).order_by("due_at")[:80],
-            "done_items": rows.filter(completed_at__isnull=False).order_by("-completed_at")[:20],
+            "open_items": open_page,
+            "page_obj": open_page,
+            "done_items": done,
             "now": now,
             "results": FOLLOWUP_RESULTS,
             "can_write": can(request.user.role, "followups.write"),
@@ -900,7 +943,8 @@ def payouts(request):
     if denied:
         return denied
     rows = Payout.objects.filter(loan_case__in=LoanCase.objects.filter(loan_scope(request.user))).select_related("loan_case__customer")
-    return render(request, "payouts.html", {"payouts": rows[:80]})
+    page = _paginate(rows, request)
+    return render(request, "payouts.html", {"payouts": page, "page_obj": page})
 
 
 def reports(request):
@@ -1061,8 +1105,9 @@ def audit(request):
     denied = require(request, "audit.read")
     if denied:
         return denied
-    rows = AuditLog.objects.select_related("user")[:200]
-    return render(request, "audit.html", {"rows": rows})
+    rows = AuditLog.objects.select_related("user")
+    page = _paginate(rows, request, page_size=200)
+    return render(request, "audit.html", {"rows": page, "page_obj": page})
 
 
 def notifications(request):
@@ -1091,12 +1136,12 @@ def download_document(request, document_id):
     if not allowed:
         raise Http404("Document not found")
     try:
-        path = stored_file_path(document.storage_key)
-    except ValueError as exc:
+        if not default_storage.exists(document.storage_key):
+            raise Http404("Document not found")
+        f = default_storage.open(document.storage_key, "rb")
+        return FileResponse(f, as_attachment=True, filename=document.file_name or "document")
+    except (FileNotFoundError, ValueError) as exc:
         raise Http404("Document not found") from exc
-    if not path.exists():
-        raise Http404("Document not found")
-    return FileResponse(path.open("rb"), as_attachment=True, filename=document.file_name or "document")
 
 
 @csrf_exempt
@@ -1127,9 +1172,16 @@ def intake(request):
         loan_amount = money(str(amount)) if amount not in (None, "") else None
     except ValueError as exc:
         return JsonResponse({"error": str(exc)}, status=400)
-    actor = User.objects.filter(role="ADMIN", is_active=True).order_by("created_at").first()
+
+    actor = None
+    intake_email = settings.INTAKE_USER_EMAIL
+    if intake_email:
+        actor = User.objects.filter(email__iexact=intake_email, is_active=True).first()
+    if not actor:
+        actor = User.objects.filter(role="ADMIN", is_active=True).order_by("created_at").first()
     if not actor:
         return JsonResponse({"error": "CRM is not ready"}, status=503)
+
     result = create_lead_record(
         actor,
         {

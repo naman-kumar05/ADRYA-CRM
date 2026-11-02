@@ -2,51 +2,302 @@
 {% load crm_tags %}
 {% block title %}Dashboard · ADYRA CRM{% endblock %}
 {% block content %}
-  <h1>Today</h1>
-  <div class="kpis">
-    {% for label, value in kpis %}
-      <article class="card kpi"><span class="muted">{{ label }}</span><strong>{{ value }}</strong></article>
-    {% endfor %}
+
+<div class="page-header">
+  <h1>Dashboard</h1>
+  <p>Overview of your pipeline, leads, and loan activity.</p>
+</div>
+
+{# ── KPI strip ─────────────────────────────────────────────────────────── #}
+<div class="kpis">
+  {% for label, value in kpis %}
+    <article class="card kpi {% if forloop.counter == 1 %}accent{% elif forloop.counter == 2 or forloop.counter == 3 %}warn{% elif forloop.counter >= 4 %}blue{% endif %}">
+      <span class="kpi-label">{{ label }}</span>
+      <strong>{{ value }}</strong>
+    </article>
+  {% endfor %}
+</div>
+
+{# ── Row 1: Lead trend + Pipeline donut ────────────────────────────────── #}
+<div class="dash-row cols-3-2">
+  <div class="panel">
+    <div class="panel-title">
+      <span>Lead Volume · Last 10 Weeks</span>
+    </div>
+    <div class="chart-wrap h240">
+      <canvas id="chartWeekly"></canvas>
+    </div>
   </div>
-  <div class="panels">
-    <section class="panel">
-      <h2>Funnel</h2>
-      {% for label, value in funnel %}
-        <p class="spread"><span>{{ label }}</span><strong>{{ value }}</strong></p>
-      {% endfor %}
-    </section>
-    <section class="panel">
-      <h2>By product group</h2>
-      {% for row in by_category %}
-        <p class="spread"><span>{{ row.label }}</span><strong>{{ row.value }}</strong></p>
-        <div class="bar"><span style="width: {% widthratio row.value by_category.0.value 100 %}%"></span></div>
-      {% empty %}<p class="muted">No leads yet.</p>{% endfor %}
-    </section>
-    <section class="panel">
-      <h2>By source</h2>
-      {% for row in by_source %}
-        <p class="spread"><span>{{ row.label }}</span><strong>{{ row.value }}</strong></p>
-      {% empty %}<p class="muted">No leads yet.</p>{% endfor %}
-    </section>
-    <section class="panel">
-      <h2>Quiet for 48 hours</h2>
-      {% for lead in quiet %}
-        <p><a href="{% url 'lead-detail' lead.id %}">{{ lead.code }}</a> · {{ lead.customer.name }} · {{ lead.pipeline_stage }}</p>
-      {% empty %}<p class="muted">Every open file has moved in the last 48 hours.</p>{% endfor %}
-    </section>
-    <section class="panel">
-      <h2>Follow-ups</h2>
-      {% for item in due %}
-        <p>{{ item.due_at|date:"d M, H:i" }} · {{ item.type }} · {{ item.lead.code }} · {{ item.lead.customer.name }}</p>
-      {% empty %}<p class="muted">Nothing due.</p>{% endfor %}
-    </section>
-    {% if show_payouts %}
-      <section class="panel">
-        <h2>Payouts</h2>
-        <p>Expected {{ expected|inr }}</p>
-        <p>Received {{ received|inr }}</p>
-        <p class="muted">{{ pending_docs }} loan documents still pending or rejected.</p>
-      </section>
+  <div class="panel">
+    <div class="panel-title">
+      <span>Pipeline Distribution</span>
+    </div>
+    <div class="chart-wrap h200">
+      <canvas id="chartPipeline"></canvas>
+    </div>
+  </div>
+</div>
+
+{# ── Row 2: Category bar + Source donut ───────────────────────────────── #}
+<div class="dash-row cols-2">
+  <div class="panel">
+    <div class="panel-title">
+      <span>Leads by Product Category</span>
+    </div>
+    {% if by_category %}
+      <div class="chart-wrap h200">
+        <canvas id="chartCategory"></canvas>
+      </div>
+    {% else %}
+      <p class="muted" style="padding:40px 0;text-align:center;">No lead data yet.</p>
     {% endif %}
   </div>
+  <div class="panel">
+    <div class="panel-title">
+      <span>Leads by Source</span>
+    </div>
+    {% if by_source %}
+      <div class="chart-wrap h200">
+        <canvas id="chartSource"></canvas>
+      </div>
+    {% else %}
+      <p class="muted" style="padding:40px 0;text-align:center;">No lead data yet.</p>
+    {% endif %}
+  </div>
+</div>
+
+{# ── Row 3: Funnel + Activity panels ──────────────────────────────────── #}
+<div class="dash-row {% if show_payouts %}cols-3{% else %}cols-2{% endif %}">
+  <div class="panel">
+    <div class="panel-title"><span>Conversion Funnel</span></div>
+    {% for label, value in funnel %}
+      {% with total=funnel.0.1 %}
+      <div class="funnel-row">
+        <span class="funnel-label">{{ label }}</span>
+        <div class="funnel-bar">
+          {% if total > 0 %}
+            <span style="width:{% widthratio value total 100 %}%"></span>
+          {% endif %}
+        </div>
+        <span class="funnel-val">{{ value }}</span>
+      </div>
+      {% endwith %}
+    {% endfor %}
+  </div>
+
+  <div class="panel">
+    <div class="panel-title"><span>Quiet for 48h</span><a href="{% url 'pipeline' %}" class="small">View pipeline →</a></div>
+    {% for lead in quiet %}
+      <div class="activity-item">
+        <span class="activity-dot warn"></span>
+        <div class="activity-body">
+          <a href="{% url 'lead-detail' lead.id %}">{{ lead.customer.name }}</a>
+          <p>{{ lead.code }} · {{ lead.pipeline_stage }}</p>
+        </div>
+      </div>
+    {% empty %}
+      <p class="muted" style="padding:16px 0;">Every open file has moved in the last 48 hours.</p>
+    {% endfor %}
+  </div>
+
+  {% if show_payouts %}
+  <div class="panel">
+    <div class="panel-title"><span>Payouts</span></div>
+    <div class="fin-row">
+      <span class="fin-label">Expected</span>
+      <span class="fin-val accent">{{ expected|inr }}</span>
+    </div>
+    <div class="fin-row">
+      <span class="fin-label">Received</span>
+      <span class="fin-val">{{ received|inr }}</span>
+    </div>
+    <div class="fin-row">
+      <span class="fin-label">Pending docs</span>
+      <span class="fin-val muted">{{ pending_docs }}</span>
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+{# ── Follow-ups due ────────────────────────────────────────────────────── #}
+<div class="panel" style="margin-top:16px;">
+  <div class="panel-title"><span>Follow-ups Due</span><a href="{% url 'followups' %}" class="small">See all →</a></div>
+  {% for item in due %}
+    <div class="activity-item">
+      <span class="activity-dot {% if item.due_at < now %}danger{% endif %}"></span>
+      <div class="activity-body">
+        <a href="{% url 'lead-detail' item.lead.id %}">{{ item.lead.customer.name }}</a>
+        <p>{{ item.due_at|date:"d M, H:i" }} · {{ item.type }} · {{ item.lead.code }}</p>
+      </div>
+    </div>
+  {% empty %}
+    <p class="muted" style="padding:16px 0;">Nothing due right now.</p>
+  {% endfor %}
+</div>
+
+{# ── Charts init ───────────────────────────────────────────────────────── #}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const ACCENT  = '#00c87a';
+  const BLUE    = '#3b82f6';
+  const WARM    = '#f59e0b';
+  const HOT     = '#f43f5e';
+  const PURPLE  = '#a78bfa';
+  const CYAN    = '#22d3ee';
+  const SURFACE = '#161924';
+  const BORDER  = '#1e2438';
+  const TEXT2   = '#8898aa';
+
+  Chart.defaults.color = TEXT2;
+  Chart.defaults.borderColor = BORDER;
+  Chart.defaults.font.family = "'Inter', system-ui, sans-serif";
+  Chart.defaults.font.size = 12;
+
+  const palette = [ACCENT, BLUE, WARM, HOT, PURPLE, CYAN, '#fb923c', '#e879f9'];
+
+  function tooltip(color) {
+    return {
+      backgroundColor: '#1d2130',
+      borderColor: '#2a3048',
+      borderWidth: 1,
+      padding: 10,
+      titleColor: '#dde4ef',
+      bodyColor: TEXT2,
+      cornerRadius: 10,
+      titleFont: { weight: '700' },
+    };
+  }
+
+  /* ── Weekly lead trend (line) ── */
+  const weekly = {{ chart_weekly_json|safe }};
+  const ctxW = document.getElementById('chartWeekly');
+  if (ctxW) {
+    new Chart(ctxW, {
+      type: 'line',
+      data: {
+        labels: weekly.labels,
+        datasets: [{
+          label: 'Leads',
+          data: weekly.values,
+          borderColor: ACCENT,
+          backgroundColor: 'rgba(0,200,122,.08)',
+          borderWidth: 2.5,
+          pointRadius: 4,
+          pointBackgroundColor: ACCENT,
+          pointBorderColor: SURFACE,
+          pointBorderWidth: 2,
+          tension: 0.4,
+          fill: true,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: { ...tooltip(), callbacks: { label: ctx => ` ${ctx.parsed.y} leads` } }
+        },
+        scales: {
+          x: { grid: { color: BORDER }, ticks: { color: TEXT2 } },
+          y: {
+            grid: { color: BORDER },
+            ticks: { color: TEXT2, stepSize: 1, precision: 0 },
+            beginAtZero: true,
+          }
+        }
+      }
+    });
+  }
+
+  /* ── Pipeline distribution (doughnut) ── */
+  const pipeline = {{ chart_pipeline_json|safe }};
+  const ctxP = document.getElementById('chartPipeline');
+  if (ctxP) {
+    new Chart(ctxP, {
+      type: 'doughnut',
+      data: {
+        labels: pipeline.labels,
+        datasets: [{
+          data: pipeline.values,
+          backgroundColor: [ACCENT, BLUE, WARM, PURPLE, CYAN],
+          borderColor: SURFACE,
+          borderWidth: 3,
+          hoverBorderColor: '#1d2130',
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        cutout: '65%',
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: { padding: 14, color: TEXT2, boxWidth: 10, borderRadius: 5, useBorderRadius: true }
+          },
+          tooltip: tooltip(),
+        }
+      }
+    });
+  }
+
+  /* ── By category (horizontal bar) ── */
+  const cat = {{ chart_category_json|safe }};
+  const ctxC = document.getElementById('chartCategory');
+  if (ctxC && cat.labels.length) {
+    new Chart(ctxC, {
+      type: 'bar',
+      data: {
+        labels: cat.labels,
+        datasets: [{
+          label: 'Leads',
+          data: cat.values,
+          backgroundColor: palette.slice(0, cat.labels.length),
+          borderRadius: 8,
+          borderSkipped: false,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        indexAxis: 'y',
+        plugins: { legend: { display: false }, tooltip: tooltip() },
+        scales: {
+          x: { grid: { color: BORDER }, ticks: { color: TEXT2, precision: 0 }, beginAtZero: true },
+          y: { grid: { display: false }, ticks: { color: TEXT2 } }
+        }
+      }
+    });
+  }
+
+  /* ── By source (doughnut) ── */
+  const src = {{ chart_source_json|safe }};
+  const ctxS = document.getElementById('chartSource');
+  if (ctxS && src.labels.length) {
+    new Chart(ctxS, {
+      type: 'doughnut',
+      data: {
+        labels: src.labels,
+        datasets: [{
+          data: src.values,
+          backgroundColor: palette.slice(0, src.labels.length),
+          borderColor: SURFACE,
+          borderWidth: 3,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        cutout: '60%',
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: { padding: 12, color: TEXT2, boxWidth: 10, borderRadius: 5, useBorderRadius: true }
+          },
+          tooltip: tooltip(),
+        }
+      }
+    });
+  }
+});
+</script>
 {% endblock %}
