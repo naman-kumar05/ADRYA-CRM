@@ -14,6 +14,9 @@ def shell(request):
         "bottom_nav": bottom,
         "more_nav": more,
         "unread": Notification.objects.filter(user=user, read=False).count(),
+        "recent_notifications": list(
+            Notification.objects.filter(user=user).order_by("-created_at")[:8]
+        ),
         "role_label": role_label(user.role),
         "can_write_leads": can(user.role, "leads.write"),
     }
