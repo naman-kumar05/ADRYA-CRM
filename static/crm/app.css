@@ -879,6 +879,7 @@ tbody tr:hover td { background: var(--surface-2); }
 .toast.error { border-color: rgba(244,63,94,.35); color: var(--hot); background: rgba(244,63,94,.08); }
 .toast.success { border-color: rgba(0,200,122,.25); }
 @keyframes toast-in { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+@keyframes toast-out { from { opacity:1; transform:translateY(0); } to { opacity:0; transform:translateY(10px); } }
 
 /* ── Command palette ─────────────────────────────────────────────────────── */
 .cmd-modal { position: fixed; inset: 0; z-index: 300; }
