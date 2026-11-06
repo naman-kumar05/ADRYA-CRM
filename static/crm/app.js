@@ -77,12 +77,22 @@ window.ADYRA = (() => {
 
   // ── Command palette ───────────────────────────────────────────────────────
 
+  const QUICK_LINKS = [
+    { label: 'New Lead', sub: 'Create a new lead', url: '/leads/new/' },
+    { label: 'Pipeline', sub: 'Open pipeline board', url: '/pipeline/' },
+    { label: 'Follow-ups', sub: 'Today\'s follow-ups', url: '/follow-ups/' },
+  ];
+
   function openCmdPalette() {
     const modal = document.getElementById('cmdModal');
     const input = document.getElementById('cmdInput');
     if (!modal) return;
     modal.removeAttribute('hidden');
-    if (input) { input.value = ''; input.focus(); }
+    if (input) {
+      input.value = '';
+      input.focus();
+    }
+    renderCmdQuickLinks();
   }
 
   function closeCmdPalette() {
@@ -93,6 +103,59 @@ window.ADYRA = (() => {
     if (results) results.innerHTML = '';
   }
 
+  function renderCmdQuickLinks() {
+    const results = document.getElementById('cmdResults');
+    if (!results) return;
+    let html = '<div class="cmd-group-label">Quick Actions</div>';
+    QUICK_LINKS.forEach(item => {
+      html += `<a class="cmd-item" href="${item.url}">
+        <svg width="16" height="16" aria-hidden="true"><use href="#icon-lightning"/></svg>
+        <div><div class="cmd-item-label">${item.label}</div><div class="cmd-item-sub">${item.sub}</div></div>
+      </a>`;
+    });
+    results.innerHTML = html;
+  }
+
+  function renderCmdResults(data) {
+    const results = document.getElementById('cmdResults');
+    if (!results) return;
+    if (!data.results || !data.results.length) {
+      results.innerHTML = '<p style="padding:20px 16px;text-align:center;color:var(--text-2);font-size:13px;">No results</p>';
+      return;
+    }
+    const groups = {};
+    data.results.forEach(r => {
+      if (!groups[r.type]) groups[r.type] = [];
+      groups[r.type].push(r);
+    });
+    const labels = { lead: 'Leads', customer: 'Customers', loan: 'Loans' };
+    let html = '';
+    Object.entries(groups).forEach(([type, items]) => {
+      html += `<div class="cmd-group-label">${labels[type] || type}</div>`;
+      items.forEach(item => {
+        html += `<a class="cmd-item" href="${item.url}">
+          <div><div class="cmd-item-label">${item.label}</div><div class="cmd-item-sub">${item.sub}</div></div>
+        </a>`;
+      });
+    });
+    results.innerHTML = html;
+  }
+
+  function moveCmdSelection(dir) {
+    const results = document.getElementById('cmdResults');
+    if (!results) return;
+    const items = Array.from(results.querySelectorAll('.cmd-item'));
+    if (!items.length) return;
+    const current = results.querySelector('.cmd-item.active');
+    let idx = current ? items.indexOf(current) + dir : (dir > 0 ? 0 : items.length - 1);
+    idx = Math.max(0, Math.min(items.length - 1, idx));
+    items.forEach(el => el.classList.remove('active'));
+    items[idx].classList.add('active');
+    items[idx].scrollIntoView({ block: 'nearest' });
+  }
+
+  let _cmdDebounce = null;
+
   function initCmdPalette() {
     const trigger = document.getElementById('cmdTrigger');
     const backdrop = document.getElementById('cmdBackdrop');
@@ -100,6 +163,30 @@ window.ADYRA = (() => {
 
     if (trigger) trigger.addEventListener('click', openCmdPalette);
     if (backdrop) backdrop.addEventListener('click', closeCmdPalette);
+
+    if (input) {
+      input.addEventListener('input', () => {
+        clearTimeout(_cmdDebounce);
+        const q = input.value.trim();
+        if (q.length < 2) { renderCmdQuickLinks(); return; }
+        _cmdDebounce = setTimeout(() => {
+          fetch(`/api/search/?q=${encodeURIComponent(q)}`)
+            .then(r => r.json())
+            .then(renderCmdResults)
+            .catch(() => {});
+        }, 200);
+      });
+
+      input.addEventListener('keydown', e => {
+        const results = document.getElementById('cmdResults');
+        if (e.key === 'ArrowDown') { e.preventDefault(); moveCmdSelection(1); }
+        else if (e.key === 'ArrowUp') { e.preventDefault(); moveCmdSelection(-1); }
+        else if (e.key === 'Enter') {
+          const active = results && results.querySelector('.cmd-item.active');
+          if (active && active.href) { closeCmdPalette(); window.location.href = active.href; }
+        }
+      });
+    }
 
     document.addEventListener('keydown', e => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
@@ -113,8 +200,6 @@ window.ADYRA = (() => {
         closeCmdPalette();
       }
     });
-
-    // Populated in Task 4 — input handler registered there
   }
 
   // ── Form double-submit prevention ─────────────────────────────────────────

@@ -1205,3 +1205,52 @@ def intake(request):
     if not result["ok"]:
         return JsonResponse({"error": result["error"]}, status=422)
     return JsonResponse({"leadId": result["code"], "id": str(result["id"])})
+
+
+def search_api(request):
+    denied = require(request)
+    if denied:
+        return JsonResponse({"results": []}, status=403)
+    q = (request.GET.get("q") or "").strip()
+    if len(q) < 2:
+        return JsonResponse({"results": []})
+    results = []
+    leads = (
+        Lead.objects.filter(lead_scope(request.user))
+        .filter(Q(customer__name__icontains=q) | Q(customer__mobile__icontains=q) | Q(code__icontains=q))
+        .select_related("customer")
+        .distinct()[:5]
+    )
+    for lead in leads:
+        results.append({
+            "type": "lead",
+            "label": lead.customer.name,
+            "sub": f"{lead.code} · {lead.product_name} · {lead.pipeline_stage}",
+            "url": f"/leads/{lead.id}/",
+        })
+    customers = (
+        Customer.objects.filter(customer_scope(request.user))
+        .filter(Q(name__icontains=q) | Q(mobile__icontains=q) | Q(code__icontains=q))
+        .distinct()[:4]
+    )
+    for c in customers:
+        results.append({
+            "type": "customer",
+            "label": c.name,
+            "sub": f"{c.code} · {c.mobile}",
+            "url": f"/customers/{c.id}/",
+        })
+    loans = (
+        LoanCase.objects.filter(loan_scope(request.user))
+        .filter(Q(customer__name__icontains=q) | Q(code__icontains=q))
+        .select_related("customer")
+        .distinct()[:4]
+    )
+    for loan in loans:
+        results.append({
+            "type": "loan",
+            "label": loan.customer.name,
+            "sub": f"{loan.code} · {loan.status} · {loan.loan_type}",
+            "url": f"/loans/{loan.id}/",
+        })
+    return JsonResponse({"results": results})

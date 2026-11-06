@@ -42,4 +42,5 @@ urlpatterns = [
     path("notifications/", views.notifications, name="notifications"),
     path("documents/<uuid:document_id>/", views.download_document, name="download-document"),
     path("api/intake/", views.intake, name="intake"),
+    path("api/search/", views.search_api, name="search-api"),
 ]
