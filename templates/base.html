@@ -17,46 +17,219 @@
   {% block head %}{% endblock %}
 </head>
 <body>
-  <div class="shell">
-    <header class="top">
-      <a class="brand" href="{% url 'dashboard' %}">ADYRA</a>
-      <div class="row">
-        <a href="{% url 'notifications' %}">Alerts{% if unread %} <span class="badge good">{{ unread }}</span>{% endif %}</a>
-        <span class="who">{{ request.user.name }} &middot; {{ role_label }}</span>
-        <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button type="submit">Sign out</button></form>
-      </div>
-    </header>
-    <div class="layout">
-      <nav class="side">
-        {% for item in nav %}
-          <a href="{{ item.href }}" {% if request.path == item.href %}aria-current="page"{% endif %}>{{ item.label }}</a>
-        {% endfor %}
-      </nav>
-      <main class="main">
-        {% if messages %}
-          <div class="messages">
-            {% for message in messages %}
-              <p class="message {% if message.tags == 'error' %}error{% endif %}">{{ message }}</p>
-            {% endfor %}
+
+{# ── SVG Icon Sprite ───────────────────────────────────────────────────── #}
+<svg xmlns="http://www.w3.org/2000/svg" hidden style="display:none">
+  <symbol id="icon-grid" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
+    <rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/>
+  </symbol>
+  <symbol id="icon-columns" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="4" height="12" rx="1"/>
+    <rect x="16" y="3" width="5" height="15" rx="1"/>
+  </symbol>
+  <symbol id="icon-users" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/>
+    <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>
+  </symbol>
+  <symbol id="icon-person" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/>
+  </symbol>
+  <symbol id="icon-list" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/>
+    <line x1="8" y1="18" x2="21" y2="18"/><circle cx="3" cy="6" r="1" fill="currentColor" stroke="none"/>
+    <circle cx="3" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="3" cy="18" r="1" fill="currentColor" stroke="none"/>
+  </symbol>
+  <symbol id="icon-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+  </symbol>
+  <symbol id="icon-building" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3 9l9-6 9 6v11a1 1 0 01-1 1H4a1 1 0 01-1-1V9z"/>
+    <polyline points="9 22 9 12 15 12 15 22"/>
+  </symbol>
+  <symbol id="icon-truck" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="1" y="3" width="15" height="13" rx="1"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/>
+    <circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>
+  </symbol>
+  <symbol id="icon-link" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/>
+    <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/>
+  </symbol>
+  <symbol id="icon-file-text" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+    <polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/>
+    <line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
+  </symbol>
+  <symbol id="icon-coins" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1110.34 18"/>
+    <path d="M7 6h1v4"/><path d="M16.71 13.88l.7.71-2.82 2.82"/>
+  </symbol>
+  <symbol id="icon-bar-chart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/>
+    <line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/>
+  </symbol>
+  <symbol id="icon-gear" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="3"/>
+    <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>
+  </symbol>
+  <symbol id="icon-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+  </symbol>
+  <symbol id="icon-bell" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+    <path d="M13.73 21a2 2 0 01-3.46 0"/>
+  </symbol>
+  <symbol id="icon-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+  </symbol>
+  <symbol id="icon-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+  </symbol>
+  <symbol id="icon-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+  </symbol>
+  <symbol id="icon-chevron-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="6 9 12 15 18 9"/>
+  </symbol>
+  <symbol id="icon-phone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-5-5 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/>
+  </symbol>
+  <symbol id="icon-message" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+  </symbol>
+  <symbol id="icon-arrow-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>
+  </symbol>
+  <symbol id="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="20 6 9 17 4 12"/>
+  </symbol>
+  <symbol id="icon-lightning" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+  </symbol>
+</svg>
+
+<div class="shell">
+  {# ── Top bar ───────────────────────────────────────────────────────────── #}
+  <header class="top">
+    <a class="brand" href="{% url 'dashboard' %}">ADYRA</a>
+
+    <button class="search-trigger" id="cmdTrigger" type="button" aria-label="Open search">
+      <svg width="15" height="15"><use href="#icon-search"/></svg>
+      <span>Search…</span>
+      <kbd>⌘K</kbd>
+    </button>
+
+    <div class="top-right">
+      {# Notification bell #}
+      <div class="notif-wrap" id="notifWrap">
+        <button class="icon-btn" id="notifBtn" type="button" aria-label="Notifications">
+          <svg width="18" height="18"><use href="#icon-bell"/></svg>
+          {% if unread %}<span class="notif-badge">{{ unread }}</span>{% endif %}
+        </button>
+        {# Notification dropdown rendered in Task 3 #}
+        <div class="notif-dropdown" id="notifDropdown" hidden>
+          <div class="notif-header">
+            <span>Notifications</span>
+            {% if unread %}<span class="badge hot">{{ unread }} new</span>{% endif %}
           </div>
-        {% endif %}
-        {% block content %}{% endblock %}
-      </main>
+          {% for n in recent_notifications %}
+            <a href="{{ n.href|default:'#' }}" class="notif-item {% if not n.read %}unread{% endif %}">
+              <div class="notif-item-title">{{ n.title }}</div>
+              <div class="notif-item-body">{{ n.body|truncatechars:70 }}</div>
+              <div class="notif-item-time">{{ n.created_at|timesince }} ago</div>
+            </a>
+          {% empty %}
+            <p class="notif-empty">No notifications yet.</p>
+          {% endfor %}
+          <a href="{% url 'notifications' %}" class="notif-footer">View all notifications →</a>
+        </div>
+      </div>
+
+      {# User avatar #}
+      <div class="avatar-wrap" id="avatarWrap">
+        <button class="avatar-btn" id="avatarBtn" type="button" aria-label="Account menu">
+          <span class="avatar-initials">{{ request.user.name|slice:":2"|upper }}</span>
+        </button>
+        <div class="avatar-dropdown" id="avatarDropdown" hidden>
+          <div class="avatar-info">
+            <strong>{{ request.user.name }}</strong>
+            <span>{{ role_label }}</span>
+          </div>
+          <div class="avatar-divider"></div>
+          <form method="post" action="{% url 'logout' %}">
+            {% csrf_token %}
+            <button type="submit" class="avatar-signout">Sign out</button>
+          </form>
+        </div>
+      </div>
     </div>
-  </div>
-  <nav class="bottom">
-    {% for item in bottom_nav %}
-      <a href="{{ item.href }}" {% if request.path == item.href %}aria-current="page"{% endif %}>{{ item.label }}</a>
-    {% endfor %}
-    <details class="more">
-      <summary>More</summary>
-      <div>
-        <a href="{% url 'dashboard' %}">Dashboard</a>
-        {% for item in more_nav %}
-          <a href="{{ item.href }}">{{ item.label }}</a>
+  </header>
+
+  <div class="layout">
+    {# ── Sidebar ─────────────────────────────────────────────────────────── #}
+    <nav class="side">
+      {% for item in nav %}
+        {% if item.href == "/dealers/" %}<div class="side-section">Network</div>{% endif %}
+        {% if item.href == "/loans/" %}<div class="side-section">Finance</div>{% endif %}
+        {% if item.href == "/reports/" %}<div class="side-section">Admin</div>{% endif %}
+        <a href="{{ item.href }}" {% if request.path == item.href %}aria-current="page"{% endif %}>
+          <svg width="17" height="17" aria-hidden="true"><use href="#icon-{{ item.icon }}"/></svg>
+          <span>{{ item.label }}</span>
+        </a>
+      {% endfor %}
+    </nav>
+
+    <main class="main">
+      {# Django messages → toasts via JS #}
+      <div id="django-messages" hidden>
+        {% for message in messages %}
+          <span class="{% if message.tags == 'error' %}error{% endif %}">{{ message }}</span>
         {% endfor %}
       </div>
-    </details>
-  </nav>
+
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+</div>
+
+{# ── Bottom nav (mobile) ──────────────────────────────────────────────── #}
+<nav class="bottom">
+  {% for item in bottom_nav %}
+    <a href="{{ item.href }}" {% if request.path == item.href %}aria-current="page"{% endif %}>
+      <svg width="20" height="20" aria-hidden="true"><use href="#icon-{{ item.icon }}"/></svg>
+      <span>{{ item.label }}</span>
+    </a>
+  {% endfor %}
+  <details class="more">
+    <summary>
+      <svg width="20" height="20" aria-hidden="true"><use href="#icon-grid"/></svg>
+      <span>More</span>
+    </summary>
+    <div>
+      <a href="{% url 'dashboard' %}">Dashboard</a>
+      {% for item in more_nav %}
+        <a href="{{ item.href }}">{{ item.label }}</a>
+      {% endfor %}
+    </div>
+  </details>
+</nav>
+
+{# ── Toast container ──────────────────────────────────────────────────── #}
+<div id="toast-container" aria-live="polite"></div>
+
+{# ── Command palette ──────────────────────────────────────────────────── #}
+<div id="cmdModal" class="cmd-modal" hidden aria-modal="true" role="dialog" aria-label="Command palette">
+  <div class="cmd-backdrop" id="cmdBackdrop"></div>
+  <div class="cmd-panel">
+    <div class="cmd-search-row">
+      <svg width="18" height="18" aria-hidden="true"><use href="#icon-search"/></svg>
+      <input id="cmdInput" type="text" placeholder="Search leads, customers, loans…" autocomplete="off" spellcheck="false">
+      <kbd class="cmd-esc">Esc</kbd>
+    </div>
+    <div id="cmdResults" class="cmd-results"></div>
+  </div>
+</div>
+
+<script src="{% static 'crm/app.js' %}"></script>
 </body>
 </html>

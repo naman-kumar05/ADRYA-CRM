@@ -66,26 +66,27 @@ def sees_full_history(role):
 
 def nav_for(role):
     items = [
-        ("/dashboard/", "Dashboard", True),
-        ("/pipeline/", "Pipeline", can(role, "leads.read")),
-        ("/leads/", "Leads", can(role, "leads.read")),
-        ("/customers/", "Customers", can(role, "customers.read") and role not in {"DEALER", "VENDOR"}),
+        ("/dashboard/", "Dashboard", True, "grid"),
+        ("/pipeline/", "Pipeline", can(role, "leads.read"), "columns"),
+        ("/leads/", "Leads", can(role, "leads.read"), "users"),
+        ("/customers/", "Customers", can(role, "customers.read") and role not in {"DEALER", "VENDOR"}, "person"),
         (
             "/requirements/",
             "Requirements",
             role in {"SUPER_ADMIN", "ADMIN", "SALES_MANAGER", "SALES_EXECUTIVE", "FINANCE_MANAGER", "MANAGEMENT"},
+            "list",
         ),
-        ("/follow-ups/", "Follow-ups", can(role, "followups.read") and role not in {"ACCOUNTS", "MANAGEMENT"}),
-        ("/dealers/", "Dealers", can(role, "dealers.read")),
-        ("/vendors/", "Vendors", can(role, "vendors.read")),
-        ("/partners/", "Finance partners", can(role, "partners.read")),
-        ("/loans/", "Loan cases", can(role, "loans.read") and role != "DEALER"),
-        ("/payouts/", "Payouts", can(role, "payouts.read")),
-        ("/reports/", "Reports", can(role, "reports.read")),
-        ("/settings/", "Settings", can(role, "settings.read")),
-        ("/audit/", "Audit log", can(role, "audit.read")),
+        ("/follow-ups/", "Follow-ups", can(role, "followups.read") and role not in {"ACCOUNTS", "MANAGEMENT"}, "clock"),
+        ("/dealers/", "Dealers", can(role, "dealers.read"), "building"),
+        ("/vendors/", "Vendors", can(role, "vendors.read"), "truck"),
+        ("/partners/", "Finance partners", can(role, "partners.read"), "link"),
+        ("/loans/", "Loan cases", can(role, "loans.read") and role != "DEALER", "file-text"),
+        ("/payouts/", "Payouts", can(role, "payouts.read"), "coins"),
+        ("/reports/", "Reports", can(role, "reports.read"), "bar-chart"),
+        ("/settings/", "Settings", can(role, "settings.read"), "gear"),
+        ("/audit/", "Audit log", can(role, "audit.read"), "shield"),
     ]
-    return [{"href": href, "label": label} for href, label, show in items if show]
+    return [{"href": href, "label": label, "icon": icon} for href, label, show, icon in items if show]
 
 
 def _none():
