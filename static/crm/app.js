@@ -233,10 +233,10 @@ window.ADYRA = (() => {
   function initForms() {
     document.querySelectorAll('form').forEach(form => {
       form.addEventListener('submit', () => {
-        const btn = form.querySelector('[type="submit"]');
-        if (btn) {
-          btn.disabled = true;
+        const btn = form.querySelector('button[type="submit"]');
+        if (btn && !btn.classList.contains('loading')) {
           btn.classList.add('loading');
+          btn.disabled = true;
         }
       });
     });

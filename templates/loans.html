@@ -11,6 +11,12 @@
         <p>{{ loan.customer.name }} · {{ loan.product_name }} · {{ loan.status }}</p>
         <p>{{ loan.loan_amount|inr }}{% if loan.lender %} · {{ loan.lender.name }}{% endif %}</p>
       </article>
-    {% empty %}<p class="muted">No cases in your view.</p>{% endfor %}
+    {% empty %}
+      <div class="empty-state">
+        <svg width="48" height="48" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="1.5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        <h3>No cases found</h3>
+        <p>{% if q %}No matches for "{{ q }}".{% else %}Nothing here yet.{% endif %}</p>
+      </div>
+    {% endfor %}
   </div>
 {% endblock %}

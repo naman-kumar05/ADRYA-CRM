@@ -22,7 +22,11 @@
           <span class="muted">{% if lead.assigned_to %}{{ lead.assigned_to.name }}{% else %}Unassigned{% endif %}</span>
         </article>
       {% empty %}
-        <p class="muted">No leads in your view.</p>
+        <div class="empty-state">
+          <svg width="48" height="48" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="1.5"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+          <h3>No leads found</h3>
+          <p>{% if q %}No matches for "{{ q }}".{% else %}Nothing here yet.{% endif %}</p>
+        </div>
       {% endfor %}
     </div>
     {% if can_assign %}

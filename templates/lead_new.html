@@ -14,25 +14,25 @@
   {% endif %}
   <form method="post" class="grid two">
     {% csrf_token %}
-    <label>Name <input name="name" required value="{{ posted.name }}"></label>
-    <label>Mobile <input name="mobile" required inputmode="numeric" value="{{ posted.mobile }}"></label>
+    <label class="required">Name <input name="name" required value="{{ posted.name }}"></label>
+    <label class="required">Mobile <input name="mobile" required inputmode="numeric" value="{{ posted.mobile }}"></label>
     <label>Alternate mobile <input name="alt_mobile" inputmode="numeric" value="{{ posted.alt_mobile }}"></label>
     <label>Email <input name="email" type="email" value="{{ posted.email }}"></label>
     <label>Occupation <input name="occupation" value="{{ posted.occupation }}"></label>
     <label>Pincode <input name="pincode" value="{{ posted.pincode }}"></label>
-    <label>State
+    <label class="required">State
       <input name="state" required list="states" value="{{ posted.state }}">
     </label>
-    <label>District <input name="district" required list="districts" value="{{ posted.district }}"></label>
-    <label>City <input name="city" required list="cities" value="{{ posted.city }}"></label>
-    <label>Source
+    <label class="required">District <input name="district" required list="districts" value="{{ posted.district }}"></label>
+    <label class="required">City <input name="city" required list="cities" value="{{ posted.city }}"></label>
+    <label class="required">Source
       <select name="source" required>
         {% for source in sources %}
           <option {% if posted.source == source.name %}selected{% endif %}>{{ source.name }}</option>
         {% endfor %}
       </select>
     </label>
-    <label>Product
+    <label class="required">Product
       <select name="product" required>
         {% for product in products %}
           <option value="{{ product.id }}" {% if posted.product == product.id|stringformat:"s" %}selected{% endif %}>{{ product.category }} · {{ product.name }}</option>
