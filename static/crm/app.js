@@ -119,6 +119,7 @@ window.ADYRA = (() => {
   function renderCmdResults(data) {
     const results = document.getElementById('cmdResults');
     if (!results) return;
+    results.innerHTML = '';
     if (!data.results || !data.results.length) {
       results.innerHTML = '<p style="padding:20px 16px;text-align:center;color:var(--text-2);font-size:13px;">No results</p>';
       return;
@@ -129,16 +130,31 @@ window.ADYRA = (() => {
       groups[r.type].push(r);
     });
     const labels = { lead: 'Leads', customer: 'Customers', loan: 'Loans' };
-    let html = '';
     Object.entries(groups).forEach(([type, items]) => {
-      html += `<div class="cmd-group-label">${labels[type] || type}</div>`;
+      const groupEl = document.createElement('div');
+      groupEl.className = 'cmd-group-label';
+      groupEl.textContent = labels[type] || type;
+      results.appendChild(groupEl);
       items.forEach(item => {
-        html += `<a class="cmd-item" href="${item.url}">
-          <div><div class="cmd-item-label">${item.label}</div><div class="cmd-item-sub">${item.sub}</div></div>
-        </a>`;
+        const a = document.createElement('a');
+        a.className = 'cmd-item';
+        // only allow relative paths — guards against javascript: URLs
+        if (typeof item.url === 'string' && item.url.startsWith('/')) {
+          a.href = item.url;
+        }
+        const inner = document.createElement('div');
+        const labelEl = document.createElement('div');
+        labelEl.className = 'cmd-item-label';
+        labelEl.textContent = item.label;
+        const subEl = document.createElement('div');
+        subEl.className = 'cmd-item-sub';
+        subEl.textContent = item.sub;
+        inner.appendChild(labelEl);
+        inner.appendChild(subEl);
+        a.appendChild(inner);
+        results.appendChild(a);
       });
     });
-    results.innerHTML = html;
   }
 
   function moveCmdSelection(dir) {
