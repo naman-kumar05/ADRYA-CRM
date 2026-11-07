@@ -1,18 +1,172 @@
 {% extends "base.html" %}
+{% load crm_tags %}
 {% block title %}Reports · ADYRA CRM{% endblock %}
 {% block content %}
-  <div class="spread">
+
+<div class="page-header spread">
+  <div>
     <h1>Reports</h1>
-    <a class="button" href="{% url 'leads-csv' %}">Download leads CSV</a>
+    <p>Performance analytics for your team and finance partners.</p>
   </div>
-  <div class="panels">
-    <section class="panel">
-      <h2>By status</h2>
-      {% for row in by_status %}<p class="spread"><span>{{ row.status }}</span><strong>{{ row.value }}</strong></p>{% endfor %}
-    </section>
-    <section class="panel">
-      <h2>By pipeline</h2>
-      {% for row in by_stage %}<p class="spread"><span>{{ row.pipeline_stage }}</span><strong>{{ row.value }}</strong></p>{% endfor %}
-    </section>
+  <a class="button secondary" href="{% url 'leads-csv' %}">Download CSV</a>
+</div>
+
+{# ── Date range filter ─────────────────────────────────────────────────── #}
+<div class="report-range">
+  <a href="?range=week" class="button {% if date_range == 'week' %}secondary{% else %}light{% endif %} sm">This Week</a>
+  <a href="?range=month" class="button {% if date_range == 'month' or not date_range %}secondary{% else %}light{% endif %} sm">This Month</a>
+  <a href="?range=3months" class="button {% if date_range == '3months' %}secondary{% else %}light{% endif %} sm">Last 3 Months</a>
+</div>
+
+{# ── Monthly disbursement chart ────────────────────────────────────────── #}
+<div class="panel" style="margin-bottom:16px;">
+  <div class="panel-title"><span>Monthly Disbursements · Last 6 Months</span></div>
+  {% if monthly_data_json != "[]" %}
+    <div class="chart-wrap h220">
+      <canvas id="chartDisburse"></canvas>
+    </div>
+  {% else %}
+    <p class="muted" style="padding:40px 0;text-align:center;">No disbursements in the last 6 months.</p>
+  {% endif %}
+</div>
+
+{# ── By status + By stage ──────────────────────────────────────────────── #}
+<div class="dash-row cols-2">
+  <div class="panel">
+    <div class="panel-title"><span>Leads by Status</span></div>
+    {% for row in by_status %}
+      <div class="funnel-row">
+        <span class="funnel-label">{{ row.status }}</span>
+        <div class="funnel-bar">
+          {% if by_status.0.value > 0 %}
+            <span style="width:{% widthratio row.value by_status.0.value 100 %}%"></span>
+          {% endif %}
+        </div>
+        <span class="funnel-val">{{ row.value }}</span>
+      </div>
+    {% empty %}
+      <p class="muted" style="padding:16px 0;">No data for this period.</p>
+    {% endfor %}
   </div>
+  <div class="panel">
+    <div class="panel-title"><span>Leads by Pipeline Stage</span></div>
+    {% for row in by_stage %}
+      <div class="funnel-row">
+        <span class="funnel-label">{{ row.pipeline_stage }}</span>
+        <div class="funnel-bar">
+          {% if by_stage.0.value > 0 %}
+            <span style="width:{% widthratio row.value by_stage.0.value 100 %}%"></span>
+          {% endif %}
+        </div>
+        <span class="funnel-val">{{ row.value }}</span>
+      </div>
+    {% empty %}
+      <p class="muted" style="padding:16px 0;">No data for this period.</p>
+    {% endfor %}
+  </div>
+</div>
+
+{# ── Executive + Partner tables ────────────────────────────────────────── #}
+<div class="dash-row cols-2">
+  <div class="panel">
+    <div class="panel-title"><span>Executive Performance</span></div>
+    {% if exec_data %}
+      <table class="report-table">
+        <thead>
+          <tr><th>Name</th><th>Leads</th><th>Closed</th><th>Rate</th></tr>
+        </thead>
+        <tbody>
+          {% for row in exec_data %}
+            <tr>
+              <td>{{ row.assigned_to__name }}</td>
+              <td>{{ row.total }}</td>
+              <td>{{ row.closed }}</td>
+              <td>{% if row.total %}{{ row.closed|floatformat:0 }}%{% else %}—{% endif %}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="muted" style="padding:16px 0;">No data for this period.</p>
+    {% endif %}
+  </div>
+  <div class="panel">
+    <div class="panel-title"><span>Finance Partner Performance</span></div>
+    {% if partner_data %}
+      <table class="report-table">
+        <thead>
+          <tr><th>Lender</th><th>Cases</th><th>Disbursed</th><th>Amount</th></tr>
+        </thead>
+        <tbody>
+          {% for row in partner_data %}
+            <tr>
+              <td>{{ row.lender__name }}</td>
+              <td>{{ row.total }}</td>
+              <td>{{ row.disbursed }}</td>
+              <td>{{ row.amt|inr }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="muted" style="padding:16px 0;">No finance cases for this period.</p>
+    {% endif %}
+  </div>
+</div>
+
+{# ── Chart init ────────────────────────────────────────────────────────── #}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const ACCENT = '#00c87a';
+  const SURFACE = '#161924';
+  const BORDER  = '#1e2438';
+  const TEXT2   = '#8898aa';
+
+  Chart.defaults.color = TEXT2;
+  Chart.defaults.borderColor = BORDER;
+  Chart.defaults.font.family = "'Inter', system-ui, sans-serif";
+  Chart.defaults.font.size = 12;
+
+  const monthly = {{ monthly_data_json|safe }};
+  const ctxD = document.getElementById('chartDisburse');
+  if (ctxD && monthly.length) {
+    new Chart(ctxD, {
+      type: 'bar',
+      data: {
+        labels: monthly.map(r => r.month),
+        datasets: [{
+          label: 'Disbursements',
+          data: monthly.map(r => r.amount),
+          backgroundColor: ACCENT,
+          borderRadius: 8,
+          borderSkipped: false,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: '#1d2130',
+            borderColor: '#2a3048',
+            borderWidth: 1,
+            padding: 10,
+            titleColor: '#dde4ef',
+            bodyColor: TEXT2,
+            cornerRadius: 10,
+            callbacks: {
+              label: ctx => ` ₹${ctx.parsed.y.toLocaleString('en-IN')} (${monthly[ctx.dataIndex].count} loans)`,
+            }
+          }
+        },
+        scales: {
+          x: { grid: { color: BORDER }, ticks: { color: TEXT2 } },
+          y: { grid: { color: BORDER }, ticks: { color: TEXT2, precision: 0 }, beginAtZero: true }
+        }
+      }
+    });
+  }
+});
+</script>
 {% endblock %}

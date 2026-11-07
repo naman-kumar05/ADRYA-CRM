@@ -970,10 +970,63 @@ def reports(request):
     denied = require(request, "reports.read")
     if denied:
         return denied
+    range_param = request.GET.get("range", "month")
+    now = timezone.now()
+    if range_param == "week":
+        since = now - timedelta(days=7)
+    elif range_param == "3months":
+        since = now - timedelta(days=90)
+    else:
+        since = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     leads = Lead.objects.filter(lead_scope(request.user))
-    by_status = list(leads.values("status").annotate(value=Count("id", distinct=True)).order_by("-value"))
-    by_stage = list(leads.values("pipeline_stage").annotate(value=Count("id", distinct=True)).order_by("-value"))
-    return render(request, "reports.html", {"by_status": by_status, "by_stage": by_stage})
+    loans = LoanCase.objects.filter(loan_scope(request.user))
+    leads_in_range = leads.filter(created_at__gte=since)
+    loans_in_range = loans.filter(created_at__gte=since)
+    by_status = list(leads_in_range.values("status").annotate(value=Count("id", distinct=True)).order_by("-value"))
+    by_stage = list(leads_in_range.values("pipeline_stage").annotate(value=Count("id", distinct=True)).order_by("-value"))
+    six_months_ago = now - timedelta(days=180)
+    monthly_disburse = (
+        loans.filter(disbursement_date__gte=six_months_ago)
+        .annotate(mo=TruncDate("disbursement_date"))
+        .values("mo")
+        .annotate(n=Count("id"), amt=Sum("disbursement_amount"))
+        .order_by("mo")
+    )
+    monthly_data = [
+        {"month": r["mo"].strftime("%b %Y") if r["mo"] else "", "count": r["n"], "amount": float(r["amt"] or 0)}
+        for r in monthly_disburse
+    ]
+    exec_data = list(
+        leads_in_range.filter(assigned_to__isnull=False)
+        .values("assigned_to__name")
+        .annotate(
+            total=Count("id", distinct=True),
+            closed=Count("id", filter=Q(status="Closed"), distinct=True),
+        )
+        .order_by("-total")[:10]
+    )
+    partner_data = list(
+        loans_in_range.filter(lender__isnull=False)
+        .values("lender__name")
+        .annotate(
+            total=Count("id", distinct=True),
+            disbursed=Count("id", filter=Q(status__in=list(DISBURSEMENT_PLUS)), distinct=True),
+            amt=Sum("disbursement_amount"),
+        )
+        .order_by("-total")[:10]
+    )
+    return render(
+        request,
+        "reports.html",
+        {
+            "by_status": by_status,
+            "by_stage": by_stage,
+            "monthly_data_json": json.dumps(monthly_data),
+            "exec_data": exec_data,
+            "partner_data": partner_data,
+            "date_range": range_param,
+        },
+    )
 
 
 def leads_csv(request):
