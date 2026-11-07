@@ -1004,6 +1004,10 @@ tbody tr:hover td { background: var(--surface-2); }
 .fu-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .collapsible-form { display: none; padding: 14px; background: var(--surface-2); border-radius: var(--r); border: 1px solid var(--border); margin-top: 4px; }
 .collapsible-form.open { display: block; }
+.detail-row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+.detail-row:last-child { border-bottom: none; }
+.detail-label { color: var(--text-2); font-size: 12px; white-space: nowrap; flex-shrink: 0; }
+.detail-value { color: var(--text); font-weight: 500; text-align: right; }
 
 /* ── Empty state ─────────────────────────────────────────────────────────── */
 .empty-state {

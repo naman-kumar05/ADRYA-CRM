@@ -1,111 +1,264 @@
 {% extends "base.html" %}
-{% load crm_tags %}
+{% load crm_tags humanize %}
 {% block title %}{{ lead.customer.name }} · ADYRA CRM{% endblock %}
 {% block content %}
-  <p class="muted">{{ lead.code }} · {{ lead.pipeline_stage }}</p>
-  <div class="spread">
-    <h1>{{ lead.customer.name }}</h1>
-    <span class="badge {{ lead.priority|lower }}">{{ lead.priority }}</span>
-  </div>
-  <p><a href="{{ tel }}">{{ lead.customer.mobile }}</a> · {{ lead.city }}, {{ lead.district }}, {{ lead.state }}</p>
-  <p>{{ lead.category }} · {{ lead.product_name }} · {{ lead.source }} · {{ lead.status }}</p>
-  {% if lead.requirement_text %}<p>{{ lead.requirement_text }}</p>{% endif %}
-  <p class="muted">Loan {{ lead.loan_amount|inr }} · Budget {{ lead.budget|inr }}</p>
 
-  {% if can_write %}
-    <section class="panel">
-      <h2>Stage</h2>
-      {% if missing %}<p class="note">Still needed before PolicyBazaar: {{ missing|join:", " }}</p>{% endif %}
-      <form method="post" action="{% url 'move-stage' lead.id %}">
-        {% csrf_token %}
-        <div class="chips">
-          {% for stage in stages %}
-            <button class="{% if stage == lead.pipeline_stage %}secondary{% else %}light{% endif %}" name="pipeline_stage" value="{{ stage }}" type="submit">{{ stage }}</button>
+{# ── Header ───────────────────────────────────────────────────────────── #}
+<div class="page-header spread" style="margin-bottom:12px;">
+  <div>
+    <a href="{% url 'leads' %}" class="small muted">← Leads</a>
+    <div class="spread" style="margin-top:4px;gap:10px;">
+      <h1 style="margin:0;">{{ lead.customer.name }}</h1>
+      <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
+        <code class="badge">{{ lead.code }}</code>
+        <span class="badge {{ lead.priority|lower }}">{{ lead.priority }}</span>
+        <span class="badge">{{ lead.status }}</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# ── Pipeline progress bar ─────────────────────────────────────────────── #}
+<div class="stage-progress" aria-label="Pipeline stage">
+  {% for stage in stages %}
+    <div class="stage-pip
+      {% if stage == lead.pipeline_stage %}current
+      {% elif forloop.counter0 < stage_index %}done{% endif %}"
+      title="{{ stage }}"></div>
+  {% endfor %}
+</div>
+
+{% if can_write %}
+  <form method="post" action="{% url 'move-stage' lead.id %}" style="margin-bottom:20px;">
+    {% csrf_token %}
+    <div class="chips" style="flex-wrap:wrap;">
+      {% for stage in stages %}
+        <button class="{% if stage == lead.pipeline_stage %}secondary{% else %}light{% endif %} sm"
+                name="pipeline_stage" value="{{ stage }}" type="submit">{{ stage }}</button>
+      {% endfor %}
+    </div>
+    {% if missing %}<p class="note" style="margin-top:8px;">Missing before next stage: {{ missing|join:", " }}</p>{% endif %}
+  </form>
+{% endif %}
+
+{# ── Two-column layout ─────────────────────────────────────────────────── #}
+<div class="lead-layout">
+
+  {# ── Left column: info + docs ──────────────────────────────────────── #}
+  <div>
+    <div class="panel" style="margin-bottom:16px;">
+      <div class="panel-title"><span>Lead Info</span>
+        {% if can_write %}
+          <button class="button light sm" data-toggle="editSection">Edit</button>
+        {% endif %}
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">Mobile</span>
+        <span>
+          <a href="{{ tel }}" class="detail-value">{{ lead.customer.mobile }}</a>
+          &nbsp;
+          <a href="https://wa.me/91{{ lead.customer.mobile }}" target="_blank" rel="noopener" class="badge" style="font-size:11px;">WA</a>
+        </span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">Product</span>
+        <span class="detail-value">{{ lead.product_name }}</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">Category</span>
+        <span class="detail-value">{{ lead.category }}</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">Source</span>
+        <span class="detail-value">{{ lead.source }}</span>
+      </div>
+      {% if lead.loan_amount %}
+      <div class="detail-row">
+        <span class="detail-label">Loan ask</span>
+        <span class="detail-value accent">{{ lead.loan_amount|inr }}</span>
+      </div>
+      {% endif %}
+      {% if lead.budget %}
+      <div class="detail-row">
+        <span class="detail-label">Budget</span>
+        <span class="detail-value">{{ lead.budget|inr }}</span>
+      </div>
+      {% endif %}
+      {% if lead.assigned_to %}
+      <div class="detail-row">
+        <span class="detail-label">Assigned</span>
+        <span class="detail-value">{{ lead.assigned_to.name }}</span>
+      </div>
+      {% endif %}
+      {% if lead.dealer %}
+      <div class="detail-row">
+        <span class="detail-label">Dealer</span>
+        <span class="detail-value">{{ lead.dealer.company_name }}</span>
+      </div>
+      {% endif %}
+      <div class="detail-row">
+        <span class="detail-label">Location</span>
+        <span class="detail-value">{{ lead.city }}, {{ lead.district }}, {{ lead.state }}</span>
+      </div>
+      {% if lead.requirement_text %}
+      <div class="detail-row" style="align-items:flex-start;">
+        <span class="detail-label">Requirement</span>
+        <span class="detail-value" style="white-space:pre-line;">{{ lead.requirement_text }}</span>
+      </div>
+      {% endif %}
+    </div>
+
+    {# ── Documents panel ──────────────────────────────────────────────── #}
+    <div class="panel">
+      <div class="panel-title"><span>Documents</span>
+        {% if can_docs %}
+          <button class="button light sm" data-toggle="docsSection">Manage</button>
+        {% endif %}
+      </div>
+      {% for doc in checklist %}
+        <div class="detail-row">
+          <span class="detail-label">{{ doc.doc_type }}</span>
+          <span>
+            <span class="badge {% if doc.status == 'Pending' or doc.status == 'Rejected' %}warn{% else %}good{% endif %}">{{ doc.status }}</span>
+            {% if doc.storage_key %}&nbsp;<a href="{% url 'download-document' doc.id %}" class="small">{{ doc.file_name }}</a>{% endif %}
+          </span>
+        </div>
+      {% endfor %}
+      {% if can_docs %}
+        <div id="docsSection" class="collapsible-form" style="margin-top:12px;">
+          {% for doc in checklist %}
+            <form method="post" action="{% url 'save-checklist' lead.id %}" enctype="multipart/form-data" style="margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border);">
+              {% csrf_token %}
+              <input type="hidden" name="doc_type" value="{{ doc.doc_type }}">
+              <strong style="font-size:13px;">{{ doc.doc_type }}</strong>
+              <div class="grid two" style="margin-top:8px;">
+                <label>Status
+                  <select name="status">
+                    {% for status in doc_statuses %}<option {% if doc.status == status %}selected{% endif %}>{{ status }}</option>{% endfor %}
+                  </select>
+                </label>
+                <label>File <input type="file" name="file" accept="application/pdf,image/*"></label>
+              </div>
+              <button type="submit" class="button light sm" style="margin-top:8px;">Save {{ doc.doc_type }}</button>
+            </form>
           {% endfor %}
         </div>
-      </form>
-    </section>
-  {% endif %}
+      {% endif %}
+    </div>
 
-  <section class="panel">
-    <h2>Documents</h2>
-    {% for doc in checklist %}
-      <form method="post" action="{% url 'save-checklist' lead.id %}" enctype="multipart/form-data" class="grid" style="margin-bottom:12px">
-        {% csrf_token %}
-        <input type="hidden" name="doc_type" value="{{ doc.doc_type }}">
-        <strong>{{ doc.doc_type }}</strong>
-        <span class="badge {% if doc.status == 'Pending' or doc.status == 'Rejected' %}warn{% else %}good{% endif %}">{{ doc.status }}</span>
-        {% if doc.storage_key %}<a href="{% url 'download-document' doc.id %}">{{ doc.file_name }}</a>{% endif %}
-        {% if can_docs %}
-          <label>Status
-            <select name="status">
-              {% for status in doc_statuses %}<option {% if doc.status == status %}selected{% endif %}>{{ status }}</option>{% endfor %}
-            </select>
-          </label>
-          <label>File <input type="file" name="file" accept="application/pdf,image/*"></label>
-          <button type="submit">Save {{ doc.doc_type }}</button>
-        {% endif %}
-      </form>
-    {% endfor %}
-  </section>
-
-  {% if can_follow %}
-    <section class="panel">
-      <h2>Call</h2>
-      <a class="button" href="{{ tel }}">Call {{ lead.customer.mobile }}</a>
-      <form method="post" action="{% url 'log-call' lead.id %}" class="grid" style="margin-top:12px">
-        {% csrf_token %}
-        <input type="hidden" name="type" value="Call">
-        <label>Result
-          <select name="result">{% for result in results %}<option>{{ result }}</option>{% endfor %}</select>
-        </label>
-        <label>Notes <textarea name="notes" placeholder="What did they say?"></textarea></label>
-        <button type="submit">Log this call</button>
-      </form>
-    </section>
-    <section class="panel">
-      <h2>WhatsApp</h2>
-      {% for item in templates %}
-        <form method="post" action="{% url 'send-whatsapp' lead.id %}">
+    {% if can_dealer_status %}
+      <div class="panel" style="margin-top:16px;">
+        <div class="panel-title"><span>Dealer Status · {{ lead.dealer_status }}</span></div>
+        <form method="post" action="{% url 'dealer-status' lead.id %}" class="row">
           {% csrf_token %}
-          <input type="hidden" name="label" value="{{ item.label }}">
-          <input type="hidden" name="text" value="{{ item.text }}">
-          <p>{{ item.text }}</p>
-          <button type="submit">{{ item.label }}</button>
+          <select name="dealer_status">{% for status in dealer_statuses %}<option {% if lead.dealer_status == status %}selected{% endif %}>{{ status }}</option>{% endfor %}</select>
+          <button type="submit" class="button light sm">Save</button>
         </form>
-      {% endfor %}
-    </section>
-    <section class="panel">
-      <h2>Follow-up</h2>
-      <form method="post" action="{% url 'add-followup' lead.id %}" class="grid two">
-        {% csrf_token %}
-        <label>Type
-          <select name="type">{% for kind in followup_types %}<option>{{ kind }}</option>{% endfor %}</select>
-        </label>
-        <label>Due <input type="datetime-local" name="due_at" required></label>
-        <label>Notes <input name="notes"></label>
-        <button type="submit">Add follow-up</button>
-      </form>
+      </div>
+    {% endif %}
+  </div>
+
+  {# ── Right column: activity ────────────────────────────────────────── #}
+  <div>
+    <div class="panel">
+      <div class="panel-title"><span>Activity</span></div>
+
+      {% if can_follow %}
+        <div class="action-bar">
+          <button class="button light sm" data-toggle="callForm">+ Log Call</button>
+          <button class="button light sm" data-toggle="noteForm">+ Note</button>
+          <button class="button light sm" data-toggle="followupForm">+ Follow-up</button>
+          <button class="button light sm" data-toggle="waForm">WhatsApp ▾</button>
+        </div>
+
+        <div id="callForm" class="collapsible-form">
+          <form method="post" action="{% url 'log-call' lead.id %}" class="grid">
+            {% csrf_token %}
+            <input type="hidden" name="type" value="Call">
+            <label>Result
+              <select name="result">{% for result in results %}<option>{{ result }}</option>{% endfor %}</select>
+            </label>
+            <label>Notes <textarea name="notes" placeholder="What did they say?" rows="3"></textarea></label>
+            <button type="submit" class="button">Log Call</button>
+          </form>
+        </div>
+
+        <div id="noteForm" class="collapsible-form">
+          <form method="post" action="{% url 'log-call' lead.id %}" class="grid">
+            {% csrf_token %}
+            <input type="hidden" name="type" value="Note">
+            <input type="hidden" name="result" value="Connected">
+            <label>Note <textarea name="notes" placeholder="Add a note…" rows="3"></textarea></label>
+            <button type="submit" class="button">Save Note</button>
+          </form>
+        </div>
+
+        <div id="followupForm" class="collapsible-form">
+          <form method="post" action="{% url 'add-followup' lead.id %}" class="grid two">
+            {% csrf_token %}
+            <label>Type
+              <select name="type">{% for kind in followup_types %}<option>{{ kind }}</option>{% endfor %}</select>
+            </label>
+            <label>Due <input type="datetime-local" name="due_at" required></label>
+            <label class="span2">Notes <input name="notes" placeholder="Optional notes…"></label>
+            <button type="submit" class="button">Schedule</button>
+          </form>
+        </div>
+
+        <div id="waForm" class="collapsible-form">
+          {% for item in templates %}
+            <form method="post" action="{% url 'send-whatsapp' lead.id %}" style="margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--border);">
+              {% csrf_token %}
+              <input type="hidden" name="label" value="{{ item.label }}">
+              <input type="hidden" name="text" value="{{ item.text }}">
+              <p style="font-size:13px;color:var(--text-2);margin-bottom:6px;">{{ item.text }}</p>
+              <button type="submit" class="button light sm">{{ item.label }}</button>
+            </form>
+          {% endfor %}
+        </div>
+      {% endif %}
+
+      {# ── Activity feed ─────────────────────────────────────────────── #}
       {% for item in followups %}
-        <p>{{ item.due_at|date:"d M, H:i" }} · {{ item.type }} · {% if item.completed_at %}Done{% else %}Open{% endif %} · {{ item.notes }}</p>
+        <div class="activity-item">
+          <span class="activity-dot
+            {% if not item.completed_at %}
+              {% if item.due_at and item.due_at < now %}danger{% else %}accent{% endif %}
+            {% elif item.result == 'Not Connected' %}warn
+            {% elif item.type == 'Note' %}blue
+            {% else %}{% endif %}"></span>
+          <div class="activity-body">
+            <strong>{{ item.type }}</strong>
+            {% if item.result %}<span class="muted"> · {{ item.result }}</span>{% endif %}
+            {% if not item.completed_at and item.due_at %}<span class="muted"> · due {{ item.due_at|date:"d M, H:i" }}</span>{% endif %}
+            <span class="activity-time">{{ item.created_at|timesince }} ago</span>
+            {% if item.notes %}<p>{{ item.notes }}</p>{% endif %}
+            {% if item.assignee %}<span class="activity-assignee">{{ item.assignee.name }}</span>{% endif %}
+          </div>
+          {% if not item.completed_at and can_follow %}
+            <form method="post" action="{% url 'finish-followup' item.id %}" class="inline-done-form">
+              {% csrf_token %}
+              <input type="hidden" name="next" value="{{ request.get_full_path }}">
+              <input type="hidden" name="result" value="Connected">
+              <button type="submit" class="button light sm">✓</button>
+            </form>
+          {% endif %}
+        </div>
+      {% empty %}
+        <p class="muted" style="padding:16px 0;">No activity yet.</p>
       {% endfor %}
-    </section>
-  {% endif %}
+    </div>
+  </div>
+</div>
 
-  {% if can_dealer_status %}
-    <section class="panel">
-      <h2>Dealer status · {{ lead.dealer_status }}</h2>
-      <form method="post" action="{% url 'dealer-status' lead.id %}" class="row">
-        {% csrf_token %}
-        <select name="dealer_status">{% for status in dealer_statuses %}<option {% if lead.dealer_status == status %}selected{% endif %}>{{ status }}</option>{% endfor %}</select>
-        <button type="submit">Save</button>
-      </form>
-    </section>
-  {% endif %}
-
-  {% if can_write %}
-    <section class="panel">
-      <h2>File</h2>
+{# ── Collapsible: Edit lead details ───────────────────────────────────── #}
+{% if can_write %}
+  <div class="panel" style="margin-top:16px;">
+    <div class="panel-title">
+      <span>Edit Lead Details</span>
+      <button class="button light sm" data-toggle="editSection">Toggle</button>
+    </div>
+    <div id="editSection" class="collapsible-form">
       <form method="post" class="grid two">
         {% csrf_token %}
         <input type="hidden" name="form" value="details">
@@ -137,17 +290,32 @@
         <label class="check"><input type="checkbox" name="loan_required" {% if lead.loan_required %}checked{% endif %}> Loan required</label>
         <label>Loan amount <input name="loan_amount" value="{{ lead.loan_amount|default_if_none:'' }}"></label>
         <label>Next follow-up <input type="datetime-local" name="next_follow_up" value="{{ lead.next_follow_up|date:'Y-m-d\\TH:i' }}"></label>
-        <label>Requirement <textarea name="requirement_text">{{ lead.requirement_text }}</textarea></label>
-        <label>Remarks <textarea name="remarks">{{ lead.remarks }}</textarea></label>
-        <button type="submit">Save file</button>
+        <label class="span2">Requirement <textarea name="requirement_text">{{ lead.requirement_text }}</textarea></label>
+        <label class="span2">Remarks <textarea name="remarks">{{ lead.remarks }}</textarea></label>
+        <button type="submit" class="button">Save Changes</button>
       </form>
-    </section>
-  {% endif %}
+    </div>
+  </div>
+{% endif %}
 
-  {% if can_loan %}
-    <section class="panel">
-      <h2>Open a finance case</h2>
-      <p class="note">ADYRA records the case. The lender makes the final decision.</p>
+{# ── Collapsible: Finance case ─────────────────────────────────────────── #}
+{% if can_loan %}
+  <div class="panel" style="margin-top:16px;">
+    <div class="panel-title">
+      <span>Finance Cases</span>
+      {% if loans %}<span class="badge">{{ loans|length }}</span>{% endif %}
+      <button class="button light sm" data-toggle="financeSection">Open Case</button>
+    </div>
+    {% for loan in loans %}
+      <div class="detail-row">
+        <a href="{% url 'loan-detail' loan.id %}" class="detail-value">{{ loan.code }}</a>
+        <span>{{ loan.status }} · {{ loan.loan_amount|inr }}</span>
+      </div>
+    {% empty %}
+      <p class="muted" style="padding:8px 0 4px;">No finance cases yet.</p>
+    {% endfor %}
+    <div id="financeSection" class="collapsible-form" style="margin-top:8px;">
+      <p class="note" style="margin-bottom:12px;">ADYRA records the case. The lender makes the final decision.</p>
       <form method="post" action="{% url 'open-loan' lead.id %}" class="grid two">
         {% csrf_token %}
         <label>Amount <input name="loan_amount" required value="{{ lead.loan_amount|default_if_none:'' }}"></label>
@@ -166,12 +334,11 @@
             {% for person in executives %}<option value="{{ person.id }}">{{ person.name }}</option>{% endfor %}
           </select>
         </label>
-        <label>Remarks <input name="remarks"></label>
-        <button type="submit">Open case</button>
+        <label class="span2">Remarks <input name="remarks"></label>
+        <button type="submit" class="button">Open Case</button>
       </form>
-      {% for loan in loans %}
-        <p><a href="{% url 'loan-detail' loan.id %}">{{ loan.code }}</a> · {{ loan.status }} · {{ loan.loan_amount|inr }}</p>
-      {% endfor %}
-    </section>
-  {% endif %}
+    </div>
+  </div>
+{% endif %}
+
 {% endblock %}

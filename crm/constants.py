@@ -113,6 +113,7 @@ FOLLOWUP_TYPES = [
     "Lender Follow-up",
     "Customer Visit",
     "Payment Follow-up",
+    "Note",
 ]
 
 FOLLOWUP_RESULTS = [

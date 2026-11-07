@@ -464,7 +464,8 @@ def lead_detail(request, lead_id):
             "assignees": User.objects.filter(is_active=True, role__in=["SALES_EXECUTIVE", "SALES_MANAGER", "ADMIN"]),
             "dealers": Dealer.objects.filter(status="Active"),
             "vendors": Vendor.objects.filter(status="Active"),
-            "followups": lead.follow_ups.select_related("assignee")[:12],
+            "followups": lead.follow_ups.select_related("assignee").order_by("-created_at")[:20],
+            "stage_index": DSA_PIPELINE.index(lead.pipeline_stage) if lead.pipeline_stage in DSA_PIPELINE else 0,
             "loans": lead.loan_cases.all(),
             "can_write": can(request.user.role, "leads.write"),
             "can_assign": can(request.user.role, "leads.assign"),
@@ -472,6 +473,7 @@ def lead_detail(request, lead_id):
             "can_follow": can(request.user.role, "followups.write"),
             "can_loan": can(request.user.role, "loans.create"),
             "can_dealer_status": can(request.user.role, "dealer.status"),
+            "now": timezone.localtime(),
         },
     )
 

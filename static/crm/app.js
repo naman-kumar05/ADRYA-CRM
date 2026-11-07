@@ -202,6 +202,17 @@ window.ADYRA = (() => {
     });
   }
 
+  // ── Collapsible panels ────────────────────────────────────────────────────
+
+  function initCollapsibles() {
+    document.querySelectorAll('[data-toggle]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const target = document.getElementById(btn.dataset.toggle);
+        if (target) target.classList.toggle('open');
+      });
+    });
+  }
+
   // ── Form double-submit prevention ─────────────────────────────────────────
 
   function initForms() {
@@ -223,6 +234,7 @@ window.ADYRA = (() => {
     initAvatar();
     initNotifs();
     initCmdPalette();
+    initCollapsibles();
     initForms();
   });
 
