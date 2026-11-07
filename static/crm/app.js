@@ -202,6 +202,21 @@ window.ADYRA = (() => {
     });
   }
 
+  // ── Tabs ─────────────────────────────────────────────────────────────────
+
+  function initTabs() {
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const panelId = btn.dataset.tab;
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+        const panel = document.getElementById(panelId);
+        if (panel) panel.classList.add('active');
+      });
+    });
+  }
+
   // ── Collapsible panels ────────────────────────────────────────────────────
 
   function initCollapsibles() {
@@ -234,6 +249,7 @@ window.ADYRA = (() => {
     initAvatar();
     initNotifs();
     initCmdPalette();
+    initTabs();
     initCollapsibles();
     initForms();
   });

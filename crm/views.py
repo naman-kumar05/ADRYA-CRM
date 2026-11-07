@@ -921,17 +921,21 @@ def followups(request):
     denied = require(request, "followups.read")
     if denied:
         return denied
-    now = timezone.now()
+    now = timezone.localtime()
+    tomorrow = now.replace(hour=23, minute=59, second=59)
+    next_week = now + timedelta(days=7)
     rows = FollowUp.objects.filter(followup_scope(request.user)).select_related("lead__customer", "assignee").distinct()
-    open_page = _paginate(rows.filter(completed_at__isnull=True).order_by("due_at"), request)
-    done = rows.filter(completed_at__isnull=False).order_by("-completed_at")[:20]
+    open_rows = rows.filter(completed_at__isnull=True)
+    today_items = list(open_rows.filter(due_at__lte=tomorrow).order_by("due_at")[:30])
+    upcoming_items = list(open_rows.filter(due_at__gt=tomorrow, due_at__lte=next_week).order_by("due_at")[:30])
+    done_items = list(rows.filter(completed_at__isnull=False).order_by("-completed_at")[:20])
     return render(
         request,
         "followups.html",
         {
-            "open_items": open_page,
-            "page_obj": open_page,
-            "done_items": done,
+            "today_items": today_items,
+            "upcoming_items": upcoming_items,
+            "done_items": done_items,
             "now": now,
             "results": FOLLOWUP_RESULTS,
             "can_write": can(request.user.role, "followups.write"),

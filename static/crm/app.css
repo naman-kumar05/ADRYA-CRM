@@ -999,8 +999,10 @@ tbody tr:hover td { background: var(--surface-2); }
 .followup-card.overdue { border-color: rgba(244,63,94,.35); }
 .followup-card.overdue .fu-time { color: var(--hot); }
 .fu-name { font-weight: 600; font-size: 15px; color: var(--text); }
+.fu-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .fu-time { font-size: 13px; font-weight: 600; color: var(--warm); }
 .fu-meta { font-size: 13px; color: var(--text-2); }
+.fu-notes { font-size: 13px; color: var(--text-2); margin: 0; }
 .fu-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .collapsible-form { display: none; padding: 14px; background: var(--surface-2); border-radius: var(--r); border: 1px solid var(--border); margin-top: 4px; }
 .collapsible-form.open { display: block; }

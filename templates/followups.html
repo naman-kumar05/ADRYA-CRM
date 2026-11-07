@@ -1,27 +1,128 @@
 {% extends "base.html" %}
+{% load crm_tags %}
 {% block title %}Follow-ups · ADYRA CRM{% endblock %}
 {% block content %}
-  <h1>Follow-ups</h1>
-  <h2>Open</h2>
-  <div class="list">
-    {% for item in open_items %}
-      <article class="card">
-        <strong>{{ item.type }}</strong>
-        <p>{{ item.due_at|date:"d M Y, H:i" }}{% if item.due_at < now %} · overdue{% endif %}</p>
-        <p>{% if item.lead %}<a href="{% url 'lead-detail' item.lead_id %}">{{ item.lead.code }}</a> · {{ item.lead.customer.name }}{% endif %}</p>
-        <p>{{ item.notes }}</p>
-        {% if can_write %}
-          <form method="post" action="{% url 'finish-followup' item.id %}" class="row">
-            {% csrf_token %}
-            <select name="result">{% for result in results %}<option>{{ result }}</option>{% endfor %}</select>
-            <button type="submit">Mark done</button>
-          </form>
-        {% endif %}
-      </article>
-    {% empty %}<p class="muted">No open follow-ups.</p>{% endfor %}
+
+<div class="page-header spread">
+  <div>
+    <h1>Follow-ups</h1>
+    <p>{{ today_items|length }} due today · {{ upcoming_items|length }} upcoming this week</p>
   </div>
-  <h2>Closed</h2>
-  {% for item in done_items %}
-    <p>{{ item.completed_at|date:"d M" }} · {{ item.type }} · {{ item.result }} · {{ item.notes }}</p>
+</div>
+
+<div class="tabs">
+  <button class="tab-btn active" data-tab="tab-today">Today ({{ today_items|length }})</button>
+  <button class="tab-btn" data-tab="tab-upcoming">Upcoming ({{ upcoming_items|length }})</button>
+  <button class="tab-btn" data-tab="tab-done">Completed</button>
+</div>
+
+{# ── TODAY ─────────────────────────────────────────────────────────────── #}
+<div id="tab-today" class="tab-panel active">
+  {% for item in today_items %}
+    <article class="followup-card {% if item.due_at < now %}overdue{% endif %}">
+      <div class="fu-row">
+        <div>
+          {% if item.lead %}
+            <a href="{% url 'lead-detail' item.lead_id %}" class="fu-name">{{ item.lead.customer.name }}</a>
+          {% else %}
+            <span class="fu-name">Unknown Lead</span>
+          {% endif %}
+          <span class="fu-meta"> · {{ item.lead.code }}</span>
+        </div>
+        <span class="badge">{{ item.type }}</span>
+      </div>
+      <div class="fu-row">
+        <span class="fu-time">{% if item.due_at < now %}Overdue · {% endif %}{{ item.due_at|date:"d M, H:i" }}</span>
+        {% if item.assignee %}<span class="fu-meta">{{ item.assignee.name }}</span>{% endif %}
+      </div>
+      {% if item.notes %}<p class="fu-notes">{{ item.notes }}</p>{% endif %}
+      <div class="fu-row" style="gap:8px;flex-wrap:wrap;">
+        <a href="{% url 'lead-detail' item.lead_id %}" class="button secondary sm">Open Lead →</a>
+        {% if can_write %}
+          <button class="button light sm" data-toggle="done-form-{{ item.id }}">✓ Mark done</button>
+        {% endif %}
+      </div>
+      {% if can_write %}
+        <div id="done-form-{{ item.id }}" class="collapsible-form">
+          <form method="post" action="{% url 'finish-followup' item.id %}">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="/follow-ups/">
+            <div class="grid two" style="gap:8px;">
+              <label>Result
+                <select name="result">{% for r in results %}<option>{{ r }}</option>{% endfor %}</select>
+              </label>
+              <label>Notes <input name="notes" placeholder="Optional…"></label>
+            </div>
+            <button type="submit" class="button" style="margin-top:8px;">Confirm done</button>
+          </form>
+        </div>
+      {% endif %}
+    </article>
+  {% empty %}
+    <div class="empty-state">
+      <p>Nothing due today — great work!</p>
+    </div>
   {% endfor %}
+</div>
+
+{# ── UPCOMING ─────────────────────────────────────────────────────────── #}
+<div id="tab-upcoming" class="tab-panel">
+  {% for item in upcoming_items %}
+    <article class="followup-card">
+      <div class="fu-row">
+        <div>
+          {% if item.lead %}
+            <a href="{% url 'lead-detail' item.lead_id %}" class="fu-name">{{ item.lead.customer.name }}</a>
+          {% else %}
+            <span class="fu-name">Unknown Lead</span>
+          {% endif %}
+          <span class="fu-meta"> · {{ item.lead.code }}</span>
+        </div>
+        <span class="badge">{{ item.type }}</span>
+      </div>
+      <div class="fu-row">
+        <span class="fu-time">{{ item.due_at|date:"D d M, H:i" }}</span>
+        {% if item.assignee %}<span class="fu-meta">{{ item.assignee.name }}</span>{% endif %}
+      </div>
+      {% if item.notes %}<p class="fu-notes">{{ item.notes }}</p>{% endif %}
+      <a href="{% url 'lead-detail' item.lead_id %}" class="button secondary sm">Open Lead →</a>
+    </article>
+  {% empty %}
+    <div class="empty-state">
+      <p>No follow-ups scheduled for the next 7 days.</p>
+    </div>
+  {% endfor %}
+</div>
+
+{# ── COMPLETED ────────────────────────────────────────────────────────── #}
+<div id="tab-done" class="tab-panel">
+  {% for item in done_items %}
+    <article class="followup-card">
+      <div class="fu-row">
+        <div>
+          {% if item.lead %}
+            <a href="{% url 'lead-detail' item.lead_id %}" class="fu-name">{{ item.lead.customer.name }}</a>
+          {% else %}
+            <span class="fu-name">Unknown Lead</span>
+          {% endif %}
+          <span class="fu-meta"> · {{ item.lead.code }}</span>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <span class="badge">{{ item.type }}</span>
+          {% if item.result %}<span class="badge good">{{ item.result }}</span>{% endif %}
+        </div>
+      </div>
+      <div class="fu-row">
+        <span class="fu-meta">Completed {{ item.completed_at|date:"d M, H:i" }}</span>
+        {% if item.assignee %}<span class="fu-meta">{{ item.assignee.name }}</span>{% endif %}
+      </div>
+      {% if item.notes %}<p class="fu-notes">{{ item.notes }}</p>{% endif %}
+    </article>
+  {% empty %}
+    <div class="empty-state">
+      <p>No completed follow-ups yet.</p>
+    </div>
+  {% endfor %}
+</div>
+
 {% endblock %}
