@@ -15,3 +15,11 @@ def join_list(value):
     if not value:
         return "—"
     return ", ".join(value)
+
+
+@register.filter
+def index(sequence, i):
+    try:
+        return sequence[i]
+    except (IndexError, TypeError, KeyError):
+        return ""

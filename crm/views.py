@@ -148,6 +148,13 @@ def logout_view(request):
     return redirect("login")
 
 
+def _trend(now_val, prev_val):
+    if not prev_val or now_val == prev_val:
+        return ""
+    diff = now_val - prev_val
+    return f"+{diff}" if diff > 0 else str(diff)
+
+
 def dashboard(request):
     denied = require(request)
     if denied:
@@ -183,7 +190,11 @@ def dashboard(request):
         loan_case_id__in=loan_ids, status__in=["Expected", "Invoice", "Approved", "Pending"]
     ).aggregate(total=Sum("expected_payout"))["total"]
     received = Payout.objects.filter(loan_case_id__in=loan_ids, status="Received").aggregate(total=Sum("net_received"))["total"]
-    due = tasks.filter(completed_at__isnull=True, due_at__lt=tomorrow).select_related("lead__customer").distinct()[:6]
+    overdue_items = tasks.filter(completed_at__isnull=True, due_at__lt=now).select_related("lead__customer").distinct()[:8]
+    due_today = tasks.filter(completed_at__isnull=True, due_at__gte=now, due_at__lt=tomorrow).select_related("lead__customer").distinct()[:8]
+    seven_days_ago = day - timedelta(days=7)
+    prev_leads_today = leads.filter(created_at__gte=seven_days_ago, created_at__lt=seven_days_ago + timedelta(days=1)).count()
+    kpi_trends = [_trend(kpis[0][1], prev_leads_today), "", "", "", "", ""]
     quiet = (
         leads.filter(stage_updated_at__lt=stale_cutoff())
         .exclude(pipeline_stage="Disbursed")
@@ -225,7 +236,9 @@ def dashboard(request):
             "expected": expected,
             "received": received,
             "pending_docs": Document.objects.filter(status__in=["Pending", "Rejected"], loan_case_id__in=loan_ids).count(),
-            "due": due,
+            "overdue_items": overdue_items,
+            "due_today": due_today,
+            "kpi_trends": kpi_trends,
             "quiet": quiet,
             "show_payouts": can(user.role, "payouts.read"),
             "chart_weekly_json": json.dumps(chart_weekly),
@@ -935,7 +948,7 @@ def finish_followup(request, followup_id):
         return redirect("followups")
     result = complete_followup(request.user, followup_id, result_name, request.POST.get("notes") or "")
     messages.success(request, "Follow-up closed.") if result.get("ok") else messages.error(request, result["error"])
-    return redirect("followups")
+    return redirect(safe_next(request.POST.get("next"), "/follow-ups/"))
 
 
 def payouts(request):

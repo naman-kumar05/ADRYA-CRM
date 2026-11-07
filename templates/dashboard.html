@@ -3,22 +3,98 @@
 {% block title %}Dashboard · ADYRA CRM{% endblock %}
 {% block content %}
 
-<div class="page-header">
-  <h1>Dashboard</h1>
-  <p>Overview of your pipeline, leads, and loan activity.</p>
-</div>
+<p class="dash-greeting">{% now "l, d F Y" %} &nbsp;·&nbsp; {{ request.user.name }}</p>
 
 {# ── KPI strip ─────────────────────────────────────────────────────────── #}
 <div class="kpis">
   {% for label, value in kpis %}
     <article class="card kpi {% if forloop.counter == 1 %}accent{% elif forloop.counter == 2 or forloop.counter == 3 %}warn{% elif forloop.counter >= 4 %}blue{% endif %}">
       <span class="kpi-label">{{ label }}</span>
-      <strong>{{ value }}</strong>
+      <strong>
+        {{ value }}
+        {% if kpi_trends|length >= forloop.counter %}
+          {% with trend=kpi_trends|index:forloop.counter0 %}
+            {% if trend %}
+              <span class="kpi-trend {% if trend|slice:':1' == '+' %}up{% else %}down{% endif %}">{{ trend }}</span>
+            {% endif %}
+          {% endwith %}
+        {% endif %}
+      </strong>
     </article>
   {% endfor %}
 </div>
 
-{# ── Row 1: Lead trend + Pipeline donut ────────────────────────────────── #}
+{# ── Today's Focus ─────────────────────────────────────────────────────── #}
+<div class="dash-row cols-2">
+  <div class="panel">
+    <div class="panel-title">
+      <span>Today's Focus</span>
+      <a href="{% url 'followups' %}" class="small">All follow-ups →</a>
+    </div>
+
+    {% if overdue_items %}
+      <p class="focus-section-label">Overdue</p>
+      {% for item in overdue_items %}
+        <div class="activity-item">
+          <span class="activity-dot danger"></span>
+          <div class="activity-body">
+            <a href="{% url 'lead-detail' item.lead.id %}">{{ item.lead.customer.name }}</a>
+            <p>{{ item.due_at|date:"d M, H:i" }} · {{ item.type }} · {{ item.lead.code }}</p>
+          </div>
+          <form method="post" action="{% url 'finish-followup' item.id %}" class="inline-done-form">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="/dashboard/">
+            <input type="hidden" name="result" value="Connected">
+            <button type="submit" class="button light sm">✓</button>
+          </form>
+        </div>
+      {% endfor %}
+    {% endif %}
+
+    {% if due_today %}
+      <p class="focus-section-label">Due Today</p>
+      {% for item in due_today %}
+        <div class="activity-item">
+          <span class="activity-dot"></span>
+          <div class="activity-body">
+            <a href="{% url 'lead-detail' item.lead.id %}">{{ item.lead.customer.name }}</a>
+            <p>{{ item.due_at|date:"H:i" }} · {{ item.type }} · {{ item.lead.code }}</p>
+          </div>
+          <form method="post" action="{% url 'finish-followup' item.id %}" class="inline-done-form">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="/dashboard/">
+            <input type="hidden" name="result" value="Connected">
+            <button type="submit" class="button light sm">✓</button>
+          </form>
+        </div>
+      {% endfor %}
+    {% endif %}
+
+    {% if not overdue_items and not due_today %}
+      <p class="muted" style="padding:16px 0;">Nothing due right now — great work!</p>
+    {% endif %}
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">
+      <span>Quiet for 48h</span>
+      <a href="{% url 'pipeline' %}" class="small">View pipeline →</a>
+    </div>
+    {% for lead in quiet %}
+      <div class="activity-item">
+        <span class="activity-dot warn"></span>
+        <div class="activity-body">
+          <a href="{% url 'lead-detail' lead.id %}">{{ lead.customer.name }}</a>
+          <p>{{ lead.code }} · {{ lead.pipeline_stage }} · {{ lead.stage_updated_at|timesince }} ago</p>
+        </div>
+      </div>
+    {% empty %}
+      <p class="muted" style="padding:16px 0;">Every open file has moved in the last 48 hours.</p>
+    {% endfor %}
+  </div>
+</div>
+
+{# ── Row 2: Lead trend + Pipeline donut ────────────────────────────────── #}
 <div class="dash-row cols-3-2">
   <div class="panel">
     <div class="panel-title">
@@ -38,7 +114,7 @@
   </div>
 </div>
 
-{# ── Row 2: Category bar + Source donut ───────────────────────────────── #}
+{# ── Row 3: Category bar + Source donut ───────────────────────────────── #}
 <div class="dash-row cols-2">
   <div class="panel">
     <div class="panel-title">
@@ -66,7 +142,7 @@
   </div>
 </div>
 
-{# ── Row 3: Funnel + Activity panels ──────────────────────────────────── #}
+{# ── Row 4: Funnel + Payouts ───────────────────────────────────────────── #}
 <div class="dash-row {% if show_payouts %}cols-3{% else %}cols-2{% endif %}">
   <div class="panel">
     <div class="panel-title"><span>Conversion Funnel</span></div>
@@ -86,17 +162,19 @@
   </div>
 
   <div class="panel">
-    <div class="panel-title"><span>Quiet for 48h</span><a href="{% url 'pipeline' %}" class="small">View pipeline →</a></div>
-    {% for lead in quiet %}
-      <div class="activity-item">
-        <span class="activity-dot warn"></span>
-        <div class="activity-body">
-          <a href="{% url 'lead-detail' lead.id %}">{{ lead.customer.name }}</a>
-          <p>{{ lead.code }} · {{ lead.pipeline_stage }}</p>
+    <div class="panel-title"><span>By Category</span></div>
+    {% for row in by_category %}
+      <div class="funnel-row">
+        <span class="funnel-label">{{ row.label }}</span>
+        <div class="funnel-bar">
+          {% if by_category.0.value > 0 %}
+            <span style="width:{% widthratio row.value by_category.0.value 100 %}%"></span>
+          {% endif %}
         </div>
+        <span class="funnel-val">{{ row.value }}</span>
       </div>
     {% empty %}
-      <p class="muted" style="padding:16px 0;">Every open file has moved in the last 48 hours.</p>
+      <p class="muted" style="padding:16px 0;">No data yet.</p>
     {% endfor %}
   </div>
 
@@ -119,22 +197,6 @@
   {% endif %}
 </div>
 
-{# ── Follow-ups due ────────────────────────────────────────────────────── #}
-<div class="panel" style="margin-top:16px;">
-  <div class="panel-title"><span>Follow-ups Due</span><a href="{% url 'followups' %}" class="small">See all →</a></div>
-  {% for item in due %}
-    <div class="activity-item">
-      <span class="activity-dot {% if item.due_at < now %}danger{% endif %}"></span>
-      <div class="activity-body">
-        <a href="{% url 'lead-detail' item.lead.id %}">{{ item.lead.customer.name }}</a>
-        <p>{{ item.due_at|date:"d M, H:i" }} · {{ item.type }} · {{ item.lead.code }}</p>
-      </div>
-    </div>
-  {% empty %}
-    <p class="muted" style="padding:16px 0;">Nothing due right now.</p>
-  {% endfor %}
-</div>
-
 {# ── Charts init ───────────────────────────────────────────────────────── #}
 <script>
 document.addEventListener('DOMContentLoaded', function () {
@@ -155,7 +217,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   const palette = [ACCENT, BLUE, WARM, HOT, PURPLE, CYAN, '#fb923c', '#e879f9'];
 
-  function tooltip(color) {
+  function tooltip() {
     return {
       backgroundColor: '#1d2130',
       borderColor: '#2a3048',
