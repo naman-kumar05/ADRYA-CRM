@@ -1,6 +1,7 @@
 from django import template
 
 from crm.human import inr as format_inr
+from crm.services import stale_cutoff
 
 register = template.Library()
 
@@ -23,3 +24,11 @@ def index(sequence, i):
         return sequence[i]
     except (IndexError, TypeError, KeyError):
         return ""
+
+
+@register.filter
+def is_stale(lead):
+    closed = {"Disbursed", "Not Interested", "Closed"}
+    if lead.pipeline_stage in closed:
+        return False
+    return lead.stage_updated_at < stale_cutoff()
